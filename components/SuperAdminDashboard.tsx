@@ -1,0 +1,398 @@
+import React, { useEffect, useState } from 'react';
+import { getGlobalStats, getUsers, updateUserPassword, updateSystemConfig } from '../services/storageService';
+import { Users, Store, DollarSign, ShoppingBag, TrendingUp, Lock, Key, X, Save, Settings, RefreshCw, ChevronDown, ChevronUp, Calendar, Clock, CreditCard, Loader2 } from 'lucide-react';
+import { User } from '../types';
+
+const SuperAdminDashboard: React.FC = () => {
+  const [stats, setStats] = useState<any>(null);
+  const [userList, setUserList] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Modal State
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+
+  // Config State
+  const [freeTierLimitInput, setFreeTierLimitInput] = useState<number>(0);
+
+  // Table State
+  const [expandedStoreId, setExpandedStoreId] = useState<string | null>(null);
+
+  useEffect(() => {
+    refreshData();
+  }, []);
+
+  const refreshData = async () => {
+    setIsLoading(true);
+    const globalStats = await getGlobalStats();
+    const users = await getUsers();
+    setStats(globalStats);
+    setUserList(users);
+    setFreeTierLimitInput(globalStats.freeTierLimit);
+    setIsLoading(false);
+  };
+
+  const handleOpenPasswordModal = (user: User) => {
+    setSelectedUser(user);
+    setNewPassword('');
+    setIsPasswordModalOpen(true);
+  };
+
+  const handleSavePassword = async () => {
+    if (selectedUser && newPassword.trim()) {
+      setIsLoading(true);
+      const success = await updateUserPassword(selectedUser.id, newPassword.trim());
+      setIsLoading(false);
+      
+      if (success) {
+        alert(`Contraseña actualizada para ${selectedUser.username}`);
+        setIsPasswordModalOpen(false);
+        await refreshData();
+      } else {
+        alert("Error al actualizar la contraseña");
+      }
+    }
+  };
+
+  const handleUpdateConfig = async () => {
+    setIsLoading(true);
+    await updateSystemConfig({ freeTierLimit: Number(freeTierLimitInput) });
+    await refreshData();
+    setIsLoading(false);
+    alert("Configuración actualizada correctamente.");
+  };
+
+  const toggleStoreRow = (storeId: string) => {
+    if (expandedStoreId === storeId) {
+      setExpandedStoreId(null);
+    } else {
+      setExpandedStoreId(storeId);
+    }
+  };
+
+  if (!stats) return <div className="p-8 flex items-center justify-center"><Loader2 className="animate-spin mr-2" /> Cargando reportes...</div>;
+
+  return (
+    <div className="space-y-8 animate-in fade-in pb-10">
+      {isLoading && (
+         <div className="fixed top-4 right-4 bg-white p-2 rounded-full shadow-lg z-50 animate-pulse">
+           <Loader2 className="animate-spin text-indigo-600" />
+         </div>
+      )}
+
+      <header className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-900">Panel de Super Administrador</h1>
+          <p className="text-slate-500">Visión global y gestión del sistema</p>
+        </div>
+        <button 
+          onClick={() => refreshData()} 
+          className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 shadow-sm transition-all active:scale-95"
+          title="Recargar Datos"
+        >
+          <RefreshCw size={20} />
+        </button>
+      </header>
+
+      {/* Global Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-slate-500 font-medium">Usuarios Totales</h3>
+            <Users className="text-blue-600" />
+          </div>
+          <p className="text-3xl font-bold text-slate-900">{stats.totalUsers}</p>
+        </div>
+        
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-slate-500 font-medium">Tiendas Activas</h3>
+            <Store className="text-indigo-600" />
+          </div>
+          <p className="text-3xl font-bold text-slate-900">{stats.totalStores}</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-slate-500 font-medium">Ventas Globales</h3>
+            <ShoppingBag className="text-purple-600" />
+          </div>
+          <p className="text-3xl font-bold text-slate-900">{stats.totalSales}</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-slate-500 font-medium">Volumen Transaccionado</h3>
+            <DollarSign className="text-green-600" />
+          </div>
+          <p className="text-3xl font-bold text-slate-900">${stats.totalRevenue.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {/* System Configuration Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+           <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Settings size={20} />
+            Configuración del Sistema
+          </h2>
+        </div>
+        <div className="p-6 flex items-end gap-4 flex-wrap">
+           <div>
+             <label className="block text-sm font-medium text-slate-700 mb-2">
+               Límite de Productos (Plan Gratuito)
+             </label>
+             <input 
+               type="number" 
+               value={freeTierLimitInput}
+               onChange={(e) => setFreeTierLimitInput(parseInt(e.target.value))}
+               className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none w-48"
+             />
+           </div>
+           <button 
+             onClick={handleUpdateConfig}
+             disabled={isLoading}
+             className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 flex items-center gap-2 h-[42px] disabled:opacity-50"
+           >
+             <Save size={18} />
+             Actualizar Configuración
+           </button>
+        </div>
+      </div>
+
+      {/* Users Management Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-indigo-50">
+          <h2 className="text-xl font-bold text-indigo-900 flex items-center gap-2">
+            <Users size={20} />
+            Gestión de Usuarios y Contraseñas
+          </h2>
+          <span className="text-sm text-slate-500 bg-slate-100 px-2 py-1 rounded">
+            Total: {userList.length}
+          </span>
+        </div>
+        <div className="overflow-x-auto max-h-96 overflow-y-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+              <tr>
+                <th className="px-6 py-3 font-semibold text-slate-600 text-sm">Usuario</th>
+                <th className="px-6 py-3 font-semibold text-slate-600 text-sm">Nombre Completo</th>
+                <th className="px-6 py-3 font-semibold text-slate-600 text-sm">Rol</th>
+                <th className="px-6 py-3 font-semibold text-slate-600 text-sm">Tipo Negocio</th>
+                <th className="px-6 py-3 font-semibold text-slate-600 text-sm text-center">Seguridad</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {userList.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500 italic">
+                    No se encontraron usuarios.
+                  </td>
+                </tr>
+              ) : (
+                userList.map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50">
+                    <td className="px-6 py-3 font-medium text-slate-900">
+                      {u.username}
+                      {u.role === 'super_admin' && <span className="ml-2 text-xs bg-red-100 text-red-600 px-1 rounded">ADMIN</span>}
+                    </td>
+                    <td className="px-6 py-3 text-slate-600">{u.firstName || '-'} {u.lastName || ''}</td>
+                    <td className="px-6 py-3 text-slate-600 capitalize">{u.role}</td>
+                    <td className="px-6 py-3 text-slate-600 capitalize">{u.businessType || '-'}</td>
+                    <td className="px-6 py-3 text-center">
+                      <button 
+                        onClick={() => handleOpenPasswordModal(u)}
+                        className="inline-flex items-center gap-1 bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 px-3 py-1 rounded-full text-xs font-bold transition-colors border border-slate-200"
+                      >
+                        <Key size={14} />
+                        Cambiar Clave
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Store List Report */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <h2 className="text-xl font-bold text-slate-800">Reporte de Tiendas</h2>
+           <span className="text-sm text-slate-500 bg-slate-100 px-2 py-1 rounded">
+            Total: {stats.storesList.length}
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-4 font-semibold text-slate-600 text-sm">ID Tienda</th>
+                <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Nombre</th>
+                <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Dueño</th>
+                <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Empleados</th>
+                <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Plan</th>
+                <th className="px-6 py-4 font-semibold text-slate-600 text-sm">Estado</th>
+                <th className="px-6 py-4 font-semibold text-slate-600 text-sm w-10"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {stats.storesList.length === 0 ? (
+                 <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500 italic">
+                    No hay tiendas registradas.
+                  </td>
+                </tr>
+              ) : (
+                stats.storesList.map((store: any) => (
+                  <React.Fragment key={store.id}>
+                    <tr 
+                      className={`hover:bg-slate-50 cursor-pointer transition-colors ${expandedStoreId === store.id ? 'bg-indigo-50/30' : ''}`}
+                      onClick={() => toggleStoreRow(store.id)}
+                    >
+                      <td className="px-6 py-4 text-xs font-mono text-slate-500">{store.id}</td>
+                      <td className="px-6 py-4 font-medium text-slate-900">{store.name}</td>
+                      <td className="px-6 py-4 text-slate-600">{store.ownerName}</td>
+                      <td className="px-6 py-4 text-slate-600">{store.staffUsernames.length}</td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${store.subscription === 'PREMIUM' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                          {store.subscription}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="flex items-center gap-1 text-green-600 text-sm font-medium">
+                          <TrendingUp size={14} /> Activo
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-slate-400">
+                         {expandedStoreId === store.id ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </td>
+                    </tr>
+                    
+                    {/* Expanded Detail Row */}
+                    {expandedStoreId === store.id && (
+                      <tr className="bg-slate-50/80 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <td colSpan={7} className="px-6 py-4 border-b border-indigo-100">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
+                             {/* Creation Date Detail */}
+                             <div className="flex flex-col gap-1">
+                               <span className="font-semibold text-slate-600 flex items-center gap-2">
+                                 <Calendar size={16} className="text-indigo-500" /> Fecha de Creación
+                               </span>
+                               <span className="text-slate-800 ml-6">
+                                 {store.createdAt 
+                                   ? new Date(store.createdAt).toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+                                   : 'N/A (Tienda antigua)'}
+                               </span>
+                             </div>
+
+                             {/* Subscription Detail */}
+                             <div className="flex flex-col gap-1">
+                               <span className="font-semibold text-slate-600 flex items-center gap-2">
+                                 <CreditCard size={16} className={store.subscription === 'PREMIUM' ? "text-amber-500" : "text-slate-400"} /> 
+                                 Detalles de Suscripción
+                               </span>
+                               <div className="ml-6 flex flex-col">
+                                 <span className={store.subscription === 'PREMIUM' ? "font-bold text-amber-700" : "text-slate-800"}>
+                                   {store.subscription === 'PREMIUM' ? 'Plan Premium (Pagado)' : 'Plan Gratuito'}
+                                 </span>
+                                 {store.subscription === 'PREMIUM' && store.subscriptionExpiry && (
+                                   <span className="text-xs text-amber-600">
+                                     Expira: {new Date(store.subscriptionExpiry).toLocaleDateString('es-ES')}
+                                   </span>
+                                 )}
+                               </div>
+                             </div>
+
+                             {/* Staff Detail */}
+                             <div className="flex flex-col gap-1">
+                               <span className="font-semibold text-slate-600 flex items-center gap-2">
+                                 <Users size={16} className="text-blue-500" />
+                                 Equipo de Trabajo
+                               </span>
+                               <div className="ml-6">
+                                 {store.staffUsernames.length > 0 ? (
+                                   <div className="flex flex-wrap gap-1">
+                                      {store.staffUsernames.map((staff: string) => (
+                                        <span key={staff} className="bg-white border border-slate-200 px-2 py-0.5 rounded text-xs font-medium text-slate-700">
+                                          {staff}
+                                        </span>
+                                      ))}
+                                   </div>
+                                 ) : (
+                                   <span className="text-slate-400 italic">Sin empleados asignados</span>
+                                 )}
+                               </div>
+                             </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Password Modal */}
+      {isPasswordModalOpen && selectedUser && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-indigo-600 p-4 flex justify-between items-center text-white">
+              <h3 className="font-bold flex items-center gap-2">
+                <Lock size={20} />
+                Cambiar Contraseña
+              </h3>
+              <button onClick={() => setIsPasswordModalOpen(false)} className="hover:bg-indigo-700 p-1 rounded">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-slate-600 mb-4">
+                Estás cambiando la contraseña para el usuario: <br/>
+                <span className="font-bold text-lg text-slate-900">{selectedUser.username}</span>
+              </p>
+              
+              <div className="space-y-2 mb-6">
+                <label className="text-sm font-medium text-slate-700">Nueva Contraseña</label>
+                <input 
+                  type="text" 
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
+                  placeholder="Ingresa nueva clave"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <button 
+                  onClick={() => setIsPasswordModalOpen(false)}
+                  className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  onClick={handleSavePassword}
+                  disabled={!newPassword.trim() || isLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  Guardar Cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+};
+
+export default SuperAdminDashboard;
