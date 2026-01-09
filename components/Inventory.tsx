@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Product, Store } from '../types';
-import { Plus, Edit2, Trash, Save, X, Crown, FileSpreadsheet, AlertTriangle, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Filter, Loader2, ChevronLeft, ChevronRight, Package, UtensilsCrossed } from 'lucide-react';
+import { Plus, Edit2, Trash, Save, X, Crown, FileSpreadsheet, AlertTriangle, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Filter, Loader2, ChevronLeft, ChevronRight, Package, UtensilsCrossed, Search } from 'lucide-react';
 import { importProductsFromCSV, importProductsFromExcel, getSystemConfig } from '../services/storageService';
 
 interface InventoryProps {
@@ -28,6 +28,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
   
   // Filtering & Sorting State
   const [filterCategory, setFilterCategory] = useState<string>('Todos');
+  const [searchText, setSearchText] = useState('');
   const [sortConfig, setSortConfig] = useState<SortConfig | null>(null);
 
   // Pagination State
@@ -69,9 +70,18 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
   const processedProducts = useMemo(() => {
     let result = [...products];
 
-    // Filter
+    // Filter by Category
     if (filterCategory !== 'Todos') {
       result = result.filter(p => (p.category || 'General') === filterCategory);
+    }
+
+    // Filter by Search Text (Name or Code)
+    if (searchText.trim()) {
+      const lowerSearch = searchText.toLowerCase();
+      result = result.filter(p => 
+        p.name.toLowerCase().includes(lowerSearch) || 
+        (p.code && p.code.toLowerCase().includes(lowerSearch))
+      );
     }
 
     // Sort
@@ -84,18 +94,22 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
         if (aValue === undefined || aValue === null) return 1;
         if (bValue === undefined || bValue === null) return -1;
 
-        if (aValue < bValue) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+        // String Comparison (Case Insensitive)
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          return sortConfig.direction === 'asc' 
+            ? aValue.localeCompare(bValue) 
+            : bValue.localeCompare(aValue);
         }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
+
+        // Numeric Comparison
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
 
     return result;
-  }, [products, filterCategory, sortConfig]);
+  }, [products, filterCategory, searchText, sortConfig]);
 
   // 3. Pagination Logic
   const totalPages = Math.ceil(processedProducts.length / itemsPerPage);
@@ -103,7 +117,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
   // Reset to page 1 if filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterCategory, sortConfig, products.length]);
+  }, [filterCategory, searchText, sortConfig, products.length]);
 
   // Verify page validity (e.g. after deletion)
   useEffect(() => {
@@ -127,11 +141,12 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
 
   const handleResetFilters = () => {
     setFilterCategory('Todos');
+    setSearchText('');
     setSortConfig(null);
     setCurrentPage(1);
   };
 
-  const hasActiveFilters = filterCategory !== 'Todos' || sortConfig !== null;
+  const hasActiveFilters = filterCategory !== 'Todos' || sortConfig !== null || searchText !== '';
 
   const handleEdit = (product: Product) => {
     setErrorMessage('');
@@ -270,16 +285,17 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
     const isActive = sortConfig?.key === sortKey;
     return (
       <th 
-        className={`px-4 py-3 font-semibold text-slate-600 text-xs uppercase cursor-pointer hover:bg-slate-100 transition-colors select-none text-${align}`}
+        className={`px-4 py-3 font-semibold text-slate-600 text-xs uppercase cursor-pointer hover:bg-slate-100 transition-colors select-none text-${align} group`}
         onClick={() => handleSort(sortKey)}
+        title={`Ordenar por ${label}`}
       >
         <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start'}`}>
           {label}
-          <span className="text-slate-400">
+          <span className={`transition-opacity duration-200 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`}>
             {isActive ? (
               sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-indigo-600" /> : <ArrowDown size={14} className="text-indigo-600" />
             ) : (
-              <ArrowUpDown size={14} />
+              <ArrowUpDown size={14} className="text-slate-400" />
             )}
           </span>
         </div>
@@ -304,9 +320,22 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
         </div>
         
         <div className="flex gap-3 flex-wrap items-center">
-          
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm">
-            <Filter size={16} className="text-slate-400" />
+          {/* Search Box */}
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-100 transition-shadow">
+             <Search size={16} className="text-slate-400" />
+             <input 
+              type="text" 
+              placeholder="Buscar..."
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="bg-transparent text-sm text-slate-700 outline-none w-32 sm:w-48"
+             />
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-100 transition-shadow">
+            <Filter size={16} className="text-indigo-500" />
+            <span className="text-xs font-bold text-slate-500 mr-1 hidden sm:inline">Categoría:</span>
             <select 
               value={filterCategory}
               onChange={(e) => setFilterCategory(e.target.value)}
@@ -397,7 +426,15 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
               {displayedProducts.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="text-center py-12 text-slate-400">
-                    <p>No se encontraron items.</p>
+                    <div className="flex flex-col items-center justify-center">
+                      <Search size={32} className="text-slate-200 mb-2" />
+                      <p>No se encontraron items.</p>
+                      {hasActiveFilters && (
+                        <button onClick={handleResetFilters} className="text-indigo-600 text-sm mt-2 hover:underline">
+                          Limpiar filtros
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (

@@ -248,8 +248,11 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
                    <h2 className="text-2xl font-bold text-slate-900 leading-tight">
                      {viewingProduct.name}
                    </h2>
-                   {/* Show Code in Modal */}
-                   <span className="text-xs text-slate-400 font-mono">COD: {viewingProduct.code}</span>
+                   {/* Enhanced Code Display */}
+                   <p className="text-sm text-slate-500 font-mono mt-1 flex items-center gap-2">
+                     <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-bold text-xs">COD</span>
+                     {viewingProduct.code}
+                   </p>
                  </div>
                  <p className="text-2xl font-bold text-indigo-600">
                    ${viewingProduct.price.toFixed(2)}
