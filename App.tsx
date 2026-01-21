@@ -7,6 +7,7 @@ import Login from './components/Login';
 import StoreManager from './components/StoreManager';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import InstallButton from './components/InstallButton';
+import HomePage from './components/HomePage'; // Import HomePage
 import { ViewState, User, Product, Sale, Store } from './types';
 import * as storage from './services/storageService';
 import { Loader2 } from 'lucide-react';
@@ -14,7 +15,8 @@ import { Loader2 } from 'lucide-react';
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
-  const [view, setView] = useState<ViewState>(ViewState.LOGIN);
+  // Change initial view to LANDING
+  const [view, setView] = useState<ViewState>(ViewState.LANDING);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -108,7 +110,8 @@ const App: React.FC = () => {
     storage.clearSession();
     setUser(null);
     setCurrentStore(null);
-    setView(ViewState.LOGIN);
+    // Redirect to LANDING instead of LOGIN
+    setView(ViewState.LANDING);
     setIsSidebarOpen(false);
   };
 
@@ -173,8 +176,13 @@ const App: React.FC = () => {
     }
   };
 
+  // If no user is logged in, handle routing between Landing and Login
   if (!user) {
-    return <Login onLogin={(u) => handleLogin(u)} />;
+    if (view === ViewState.LANDING) {
+      return <HomePage onGetStarted={() => setView(ViewState.LOGIN)} />;
+    }
+    // Default to Login component (which handles register/recover internally)
+    return <Login onLogin={(u) => handleLogin(u)} onBack={() => setView(ViewState.LANDING)} />;
   }
 
   return (

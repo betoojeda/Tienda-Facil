@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, ShoppingCart, Package, LogOut, Menu, Store as StoreIcon, ShieldCheck } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, LogOut, Menu, Store as StoreIcon, ShieldCheck, Sparkles } from 'lucide-react';
 import { ViewState, Role } from '../types';
 
 interface NavbarProps {

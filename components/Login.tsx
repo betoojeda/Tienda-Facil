@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { User } from '../types';
-import { Store, ArrowRight, UserPlus, LogIn, KeyRound, Mail, ChefHat, ShoppingBag, Loader2 } from 'lucide-react';
+import { Store, ArrowRight, UserPlus, LogIn, KeyRound, Mail, ChefHat, ShoppingBag, Loader2, ArrowLeft } from 'lucide-react';
 import * as storage from '../services/storageService';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  onBack?: () => void; // Optional back function
 }
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'RECOVER';
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
   const [currentView, setCurrentView] = useState<AuthView>('LOGIN');
   const [isLoading, setIsLoading] = useState(false);
   
@@ -123,10 +124,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="p-8 text-center bg-indigo-50 border-b border-indigo-100 flex-shrink-0">
+        <div className="p-8 text-center bg-indigo-50 border-b border-indigo-100 flex-shrink-0 relative">
+          {onBack && (
+            <button 
+              onClick={onBack}
+              className="absolute left-4 top-4 p-2 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-full transition-all"
+              title="Volver al Inicio"
+            >
+              <ArrowLeft size={20} />
+            </button>
+          )}
           <div className="inline-flex p-3 bg-white rounded-full shadow-md mb-4">
             <Store size={40} className="text-indigo-600" />
           </div>
