@@ -1,19 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { Store, ArrowRight, UserPlus, LogIn, KeyRound, Mail, ChefHat, ShoppingBag, Loader2, ArrowLeft } from 'lucide-react';
+import { Store, UserPlus, LogIn, KeyRound, Mail, ChefHat, ShoppingBag, Loader2, ArrowLeft } from 'lucide-react';
 import * as storage from '../services/storageService';
 
 interface LoginProps {
   onLogin: (user: User) => void;
   onBack?: () => void; // Optional back function
+  initialView?: 'LOGIN' | 'REGISTER' | 'RECOVER';
 }
 
 type AuthView = 'LOGIN' | 'REGISTER' | 'RECOVER';
 
-const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
-  const [currentView, setCurrentView] = useState<AuthView>('LOGIN');
+const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' }) => {
+  const [currentView, setCurrentView] = useState<AuthView>(initialView);
   const [isLoading, setIsLoading] = useState(false);
   
+  // Sync if prop changes
+  useEffect(() => {
+    setCurrentView(initialView);
+  }, [initialView]);
+
   // Login fields
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -108,13 +114,25 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack }) => {
         return;
       }
       
-      const targetUser = await storage.authenticateUser(username, password);
+      // Verificación robusta de errores
+      const users = await storage.getUsers();
+      const userAccount = users.find(u => u.username === username);
 
-      if (!targetUser) {
-        setError('Usuario o contraseña incorrectos.');
-      } else {
-        onLogin(targetUser);
+      if (!userAccount) {
+        setError('El usuario ingresado no existe. Verifica el nombre o regístrate.');
+        setIsLoading(false);
+        return;
       }
+
+      if (userAccount.password !== password) {
+        setError('La contraseña es incorrecta. Inténtalo de nuevo.');
+        setIsLoading(false);
+        return;
+      }
+
+      // Login exitoso
+      onLogin(userAccount);
+
     } catch (err) {
       setError("Error de conexión con la base de datos.");
     } finally {

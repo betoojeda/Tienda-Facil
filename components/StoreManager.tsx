@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Store, User } from '../types';
-import { Plus, Users, ArrowRight, Store as StoreIcon, Settings, Crown, CheckCircle, Loader2, UserPlus, Link as LinkIcon, Calendar, Clock, X, Check } from 'lucide-react';
+import { Plus, Users, ArrowRight, Store as StoreIcon, Settings, Crown, CheckCircle, Loader2, UserPlus, Link as LinkIcon, Calendar, Clock, X, Check, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
 import * as storage from '../services/storageService';
 
 interface StoreManagerProps {
@@ -25,6 +25,9 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
   // Pricing Modal
   const [showPricing, setShowPricing] = useState<{show: boolean, storeId: string | null}>({show: false, storeId: null});
 
+  // Expandable Cards State
+  const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set());
+
   // Link Existing State
   const [linkUsername, setLinkUsername] = useState('');
   
@@ -39,6 +42,22 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
   const [staffError, setStaffError] = useState('');
   const [staffSuccess, setStaffSuccess] = useState('');
 
+  // --- Logic Grouping ---
+  const ownedStores = availableStores.filter(s => s.ownerId === user.id);
+  const employedStores = availableStores.filter(s => s.ownerId !== user.id);
+
+  const toggleExpand = (storeId: string) => {
+    setExpandedStores(prev => {
+      const next = new Set(prev);
+      if (next.has(storeId)) {
+        next.delete(storeId);
+      } else {
+        next.add(storeId);
+      }
+      return next;
+    });
+  };
+
   const handleCreateStore = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newStoreName.trim()) {
@@ -48,6 +67,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
       await onStoreCreated();
       setIsLoading(false);
       setIsCreating(false);
+      setNewStoreName('');
     }
   };
 
@@ -139,6 +159,145 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
     return 'Tienda';
   };
 
+  // --- Sub-render: Store Card ---
+  const renderStoreCard = (store: Store, isOwner: boolean) => {
+    const isPremium = store.subscription === 'PREMIUM';
+    const isExpanded = expandedStores.has(store.id);
+    const isSelected = currentStore?.id === store.id;
+
+    return (
+      <div 
+        key={store.id} 
+        className={`bg-white rounded-xl border transition-all duration-200 overflow-hidden ${
+          isSelected 
+            ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-md' 
+            : 'border-slate-200 shadow-sm hover:shadow-md'
+        }`}
+      >
+        {/* Card Header (Always Visible) - Click to toggle */}
+        <div 
+          onClick={() => toggleExpand(store.id)}
+          className={`p-4 flex items-center justify-between cursor-pointer ${isSelected ? 'bg-indigo-50/50' : 'bg-white hover:bg-slate-50'}`}
+        >
+          <div className="flex items-center gap-4">
+            <div className={`p-2.5 rounded-lg flex-shrink-0 ${
+              isSelected ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500'
+            }`}>
+              <StoreIcon size={20} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                {store.name}
+                {isPremium && <Crown size={14} className="text-amber-500 fill-amber-500" />}
+                {isSelected && (
+                  <span className="text-[10px] uppercase bg-indigo-600 text-white px-2 py-0.5 rounded-full font-bold tracking-wide">
+                    En uso
+                  </span>
+                )}
+              </h3>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                 {isPremium ? (store.planId === 'pro_mxn' ? 'Plan Empresarial' : 'Plan Emprendedor') : 'Plan Gratuito'}
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+             {/* Quick select button if not expanded */}
+             {!isExpanded && !isSelected && (
+               <button 
+                 onClick={(e) => { e.stopPropagation(); onSelectStore(store); }}
+                 className="mr-2 text-xs font-bold text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-full transition-colors"
+               >
+                 Seleccionar
+               </button>
+             )}
+             <div className={`transition-transform duration-200 text-slate-400 ${isExpanded ? 'rotate-180' : ''}`}>
+               <ChevronDown size={20} />
+             </div>
+          </div>
+        </div>
+
+        {/* Card Body (Collapsible) */}
+        {isExpanded && (
+          <div className="p-4 border-t border-slate-100 bg-white animate-in slide-in-from-top-2 duration-200">
+             
+             {/* Info Grid */}
+             <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                <div className="bg-slate-50 p-3 rounded-lg">
+                   <span className="block text-xs text-slate-400 uppercase font-bold mb-1">Rol</span>
+                   <span className="font-medium text-slate-700 flex items-center gap-1">
+                     {isOwner ? <Crown size={14} className="text-amber-500" /> : <Briefcase size={14} className="text-blue-500" />}
+                     {isOwner ? 'Dueño / Admin' : 'Empleado / Vendedor'}
+                   </span>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-lg">
+                   <span className="block text-xs text-slate-400 uppercase font-bold mb-1">Empleados</span>
+                   <span className="font-medium text-slate-700">
+                     {store.staffUsernames.length} {isPremium ? '' : '/ 5'}
+                   </span>
+                </div>
+                {isPremium && store.subscriptionExpiry && (
+                   <div className="col-span-2 bg-amber-50 p-3 rounded-lg border border-amber-100">
+                      <span className="block text-xs text-amber-600 uppercase font-bold mb-1">Suscripción Activa</span>
+                      <span className="text-xs text-amber-800 font-medium flex items-center gap-1">
+                        <Clock size={12} />
+                        Vence: {new Date(store.subscriptionExpiry).toLocaleDateString()}
+                      </span>
+                   </div>
+                )}
+             </div>
+
+             {/* Actions */}
+             <div className="flex flex-col sm:flex-row gap-3">
+                <button 
+                  onClick={() => onSelectStore(store)}
+                  className={`flex-1 py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${
+                    isSelected 
+                    ? 'bg-indigo-50 text-indigo-700 cursor-default border border-indigo-200' 
+                    : 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm'
+                  }`}
+                >
+                  {isSelected ? (
+                    <>
+                      <CheckCircle size={16} />
+                      Tienda Actual
+                    </>
+                  ) : (
+                    <>
+                      Administrar Tienda
+                      <ArrowRight size={16} />
+                    </>
+                  )}
+                </button>
+                
+                {isOwner && (
+                  <button 
+                    onClick={() => { setManageStaffStore(store); }}
+                    className="p-2.5 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg border border-slate-200 transition-colors flex items-center justify-center gap-2"
+                    title="Configurar Empleados"
+                  >
+                    <Users size={18} />
+                    <span className="sm:hidden">Empleados</span>
+                  </button>
+                )}
+
+                {isOwner && !isPremium && (
+                  <button
+                    onClick={() => { setShowPricing({show: true, storeId: store.id}); }}
+                    className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-bold hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Crown size={16} />
+                    Mejorar
+                  </button>
+                )}
+             </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // --- MAIN RENDER: Staff Manager View ---
   if (manageStaffStore) {
     const isFree = manageStaffStore.subscription === 'FREE';
     const staffCount = manageStaffStore.staffUsernames.length;
@@ -343,18 +502,20 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
     );
   }
 
+  // --- MAIN RENDER: Store List View ---
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-6 animate-in fade-in">
+    <div className="max-w-4xl mx-auto p-4 space-y-8 animate-in fade-in">
       {isLoading && !showPricing.show && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-white/50">
            <Loader2 className="animate-spin text-indigo-600" />
         </div>
       )}
 
-      <div className="flex justify-between items-center">
+      {/* Header & Create Button */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
            <h1 className="text-2xl font-bold text-slate-900">Mis Tiendas</h1>
-           <p className="text-slate-500 text-sm">Gestiona tus sucursales y suscripciones</p>
+           <p className="text-slate-500 text-sm">Gestiona sucursales y suscripciones</p>
         </div>
         {!isCreating && (
           <button 
@@ -367,6 +528,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
         )}
       </div>
 
+      {/* Create Form */}
       {isCreating && (
          <div className="bg-white p-6 rounded-xl shadow-md border border-indigo-100 animate-in zoom-in-95">
            <h3 className="font-semibold text-lg mb-4 text-slate-800">Crear Nueva Tienda</h3>
@@ -385,98 +547,48 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
          </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {availableStores.map(store => {
-          const isPremium = store.subscription === 'PREMIUM';
-          const isOwner = store.ownerId === user.id;
-
-          return (
-            <div key={store.id} className={`bg-white rounded-xl p-6 border transition-all duration-200 flex flex-col ${currentStore?.id === store.id ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-md transform scale-[1.02]' : 'border-slate-200 shadow-sm hover:shadow-md'}`}>
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex items-center gap-3">
-                  <div className={`p-3 rounded-lg ${currentStore?.id === store.id ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
-                    <StoreIcon size={24} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                      {store.name}
-                      {isPremium && <Crown size={16} className="text-amber-500 fill-amber-500" />}
-                    </h3>
-                    <p className="text-xs text-slate-500 font-medium">
-                      {isOwner ? 'Rol: Dueño' : 'Rol: Empleado'} • {getBusinessLabel(user.businessType)}
-                    </p>
-                  </div>
-                </div>
-                {isOwner && (
-                  <button 
-                    onClick={(e) => { e.stopPropagation(); setManageStaffStore(store); }}
-                    className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors group relative"
-                    title="Gestionar Empleados"
-                  >
-                    <Settings size={20} />
-                  </button>
-                )}
-              </div>
-              
-              <div className="mb-4 bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <div className="flex justify-between items-center mb-1">
-                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Plan Actual</span>
-                     {isPremium && (
-                        <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200">
-                          ACTIVO
-                        </span>
-                     )}
-                  </div>
-                  <div className={`flex items-center gap-2 font-bold ${isPremium ? 'text-amber-600' : 'text-slate-600'}`}>
-                    {isPremium ? <Crown size={18} /> : <StoreIcon size={18} />}
-                    {isPremium ? (store.planId === 'pro_mxn' ? 'Plan Empresarial' : 'Plan Emprendedor') : 'Plan Gratuito'}
-                  </div>
-                  
-                  {isPremium && store.subscriptionExpiry ? (
-                    <div className="mt-2 pt-2 border-t border-slate-200/50 flex items-center gap-1.5 text-xs text-slate-500">
-                       <Clock size={12} />
-                       <span>Vence el: </span>
-                       <span className="font-medium text-slate-700">
-                         {new Date(store.subscriptionExpiry).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}
-                       </span>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 mt-1">Límite de 5 empleados.</p>
-                  )}
-              </div>
-
-              <div className="mt-auto space-y-3">
-                <button 
-                  onClick={() => onSelectStore(store)}
-                  className={`w-full py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors ${currentStore?.id === store.id ? 'bg-indigo-50 text-indigo-700 cursor-default' : 'bg-slate-900 text-white hover:bg-slate-800 shadow-sm'}`}
-                >
-                  {currentStore?.id === store.id ? (
-                    <>
-                      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
-                      Tienda Seleccionada
-                    </>
-                  ) : (
-                    <>
-                      Administrar Tienda
-                      <ArrowRight size={16} />
-                    </>
-                  )}
-                </button>
-                
-                {isOwner && !isPremium && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setShowPricing({show: true, storeId: store.id}); }}
-                    className="w-full py-2 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-bold hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Crown size={16} />
-                    Mejorar a Premium
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+      {/* SECTION 1: Owned Stores */}
+      <div>
+        <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+           <Crown size={16} />
+           Tiendas que Administro
+        </h2>
+        
+        {ownedStores.length === 0 ? (
+          <div className="text-center py-8 border-2 border-dashed border-slate-200 rounded-xl">
+             <StoreIcon className="mx-auto text-slate-300 mb-2" size={32} />
+             <p className="text-slate-500 text-sm">No has creado ninguna tienda todavía.</p>
+             <button onClick={() => setIsCreating(true)} className="text-indigo-600 font-bold text-sm mt-2 hover:underline">
+               Crear mi primera tienda
+             </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+            {ownedStores.map(store => renderStoreCard(store, true))}
+          </div>
+        )}
       </div>
+
+      {/* SECTION 2: Employed Stores (Only show if applicable) */}
+      {(employedStores.length > 0 || user.role === 'employee') && (
+        <div>
+          <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2 mt-4 pt-4 border-t border-slate-100 md:border-0 md:pt-0 md:mt-0">
+             <Briefcase size={16} />
+             Tiendas Asignadas
+          </h2>
+          
+          {employedStores.length === 0 ? (
+            <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-500 flex items-center gap-3">
+               <Briefcase className="text-slate-400" size={20} />
+               No estás vinculado a otras tiendas como empleado.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-4">
+              {employedStores.map(store => renderStoreCard(store, false))}
+            </div>
+          )}
+        </div>
+      )}
 
       {showPricing.show && (
          <PricingModal 

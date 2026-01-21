@@ -179,10 +179,18 @@ const App: React.FC = () => {
   // If no user is logged in, handle routing between Landing and Login
   if (!user) {
     if (view === ViewState.LANDING) {
-      return <HomePage onGetStarted={() => setView(ViewState.LOGIN)} />;
+      return <HomePage 
+        onLogin={() => setView(ViewState.LOGIN)} 
+        onRegister={() => setView(ViewState.REGISTER)} 
+      />;
     }
     // Default to Login component (which handles register/recover internally)
-    return <Login onLogin={(u) => handleLogin(u)} onBack={() => setView(ViewState.LANDING)} />;
+    const loginInitialView = view === ViewState.REGISTER ? 'REGISTER' : 'LOGIN';
+    return <Login 
+      initialView={loginInitialView}
+      onLogin={(u) => handleLogin(u)} 
+      onBack={() => setView(ViewState.LANDING)} 
+    />;
   }
 
   return (
