@@ -23,7 +23,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
   const [staffTab, setStaffTab] = useState<'link' | 'create'>('link');
 
   // Pricing Modal
-  const [showPricing, setShowPricing] = useState<{show: boolean, storeId: string | null}>({show: false, storeId: null});
+  const [showPricing, setShowPricing] = useState<{show: boolean, storeId: string | null, currentPlanId?: string}>({show: false, storeId: null});
 
   // Expandable Cards State
   const [expandedStores, setExpandedStores] = useState<Set<string>>(new Set());
@@ -79,7 +79,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
     await onStoreCreated();
     setIsLoading(false);
     setShowPricing({ show: false, storeId: null });
-    alert("¡Suscripción Activada con Éxito!");
+    alert("¡Suscripción Actualizada con Éxito!");
   };
 
   const handleLinkStaff = async (e: React.FormEvent) => {
@@ -164,6 +164,9 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
     const isPremium = store.subscription === 'PREMIUM';
     const isExpanded = expandedStores.has(store.id);
     const isSelected = currentStore?.id === store.id;
+    
+    // Logic to show upgrade button: Show if owner AND not on top tier (pro_mxn)
+    const showUpgradeButton = isOwner && store.planId !== 'pro_mxn';
 
     return (
       <div 
@@ -281,13 +284,13 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
                   </button>
                 )}
 
-                {isOwner && !isPremium && (
+                {showUpgradeButton && (
                   <button
-                    onClick={() => { setShowPricing({show: true, storeId: store.id}); }}
+                    onClick={() => { setShowPricing({show: true, storeId: store.id, currentPlanId: store.planId}); }}
                     className="flex-1 sm:flex-none px-4 py-2.5 rounded-lg border border-amber-300 bg-amber-50 text-amber-700 text-sm font-bold hover:bg-amber-100 transition-colors flex items-center justify-center gap-2"
                   >
                     <Crown size={16} />
-                    Mejorar
+                    {isPremium ? 'Subir Plan' : 'Mejorar'}
                   </button>
                 )}
              </div>
@@ -393,7 +396,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
                        El plan gratuito permite hasta 5 empleados. Desbloquea capacidad ilimitada mejorando tu plan.
                      </p>
                      <button 
-                        onClick={() => setShowPricing({ show: true, storeId: manageStaffStore.id })}
+                        onClick={() => setShowPricing({ show: true, storeId: manageStaffStore.id, currentPlanId: manageStaffStore.planId })}
                         className="bg-gradient-to-r from-amber-500 to-orange-500 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:scale-105 transition-transform"
                      >
                        Ver Planes Premium
@@ -496,6 +499,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
             onClose={() => setShowPricing({show: false, storeId: null})}
             onSelectPlan={handleUpgrade}
             isLoading={isLoading}
+            currentPlanId={manageStaffStore.planId}
           />
         )}
       </div>
@@ -595,6 +599,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
            onClose={() => setShowPricing({show: false, storeId: null})} 
            onSelectPlan={handleUpgrade}
            isLoading={isLoading}
+           currentPlanId={showPricing.currentPlanId}
          />
       )}
     </div>
@@ -602,89 +607,115 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
 };
 
 // --- Subcomponent: Pricing Modal ---
-const PricingModal = ({ onClose, onSelectPlan, isLoading }: { onClose: () => void, onSelectPlan: (id: string) => void, isLoading: boolean }) => (
-  <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
-       <div className="p-6 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
-         <div>
-            <h2 className="text-2xl font-bold text-slate-900">Elige tu Plan</h2>
-            <p className="text-slate-500">Impulsa tu negocio con las mejores herramientas</p>
+const PricingModal = ({ onClose, onSelectPlan, isLoading, currentPlanId }: { onClose: () => void, onSelectPlan: (id: string) => void, isLoading: boolean, currentPlanId?: string }) => {
+  const isFree = !currentPlanId || currentPlanId === 'free';
+  const isBasic = currentPlanId === 'basic_mxn';
+  const isPro = currentPlanId === 'pro_mxn';
+
+  return (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+         <div className="p-6 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
+           <div>
+              <h2 className="text-2xl font-bold text-slate-900">Elige tu Plan</h2>
+              <p className="text-slate-500">Impulsa tu negocio con las mejores herramientas</p>
+           </div>
+           <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full">
+             <X size={24} className="text-slate-500" />
+           </button>
          </div>
-         <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full">
-           <X size={24} className="text-slate-500" />
-         </button>
-       </div>
-       
-       <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          {/* Plan Gratuito */}
-          <div className="border border-slate-200 rounded-xl p-6 flex flex-col hover:border-slate-400 transition-colors">
-             <div className="mb-4">
-               <h3 className="font-bold text-lg text-slate-800">Gratuito</h3>
-               <p className="text-3xl font-bold mt-2">$0 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
-             </div>
-             <ul className="space-y-3 mb-8 flex-1">
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 1 Tienda</li>
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 5 Empleados Máx.</li>
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 1000 Productos</li>
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> Punto de Venta Básico</li>
-             </ul>
-             <button disabled className="w-full py-2 bg-slate-100 text-slate-400 font-bold rounded-lg cursor-not-allowed">
-               Tu Plan Actual
-             </button>
-          </div>
+         
+         <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Plan Gratuito */}
+            <div className={`border rounded-xl p-6 flex flex-col transition-colors ${isFree ? 'border-indigo-200 bg-indigo-50/20' : 'border-slate-200'}`}>
+               <div className="mb-4">
+                 <h3 className="font-bold text-lg text-slate-800">Gratuito</h3>
+                 <p className="text-3xl font-bold mt-2">$0 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
+               </div>
+               <ul className="space-y-3 mb-8 flex-1">
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 1 Tienda</li>
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 5 Empleados Máx.</li>
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 1000 Productos</li>
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> Punto de Venta Básico</li>
+               </ul>
+               <button disabled className="w-full py-2 bg-slate-100 text-slate-400 font-bold rounded-lg cursor-not-allowed">
+                 {isFree ? 'Tu Plan Actual' : 'Plan Básico'}
+               </button>
+            </div>
 
-          {/* Plan Emprendedor */}
-          <div className="border-2 border-indigo-500 rounded-xl p-6 flex flex-col relative bg-indigo-50/30 shadow-lg transform scale-105">
-             <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold shadow-sm">
-               MÁS POPULAR
-             </div>
-             <div className="mb-4">
-               <h3 className="font-bold text-lg text-indigo-900">Emprendedor</h3>
-               <p className="text-3xl font-bold mt-2 text-indigo-700">$199 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
-             </div>
-             <ul className="space-y-3 mb-8 flex-1">
-               <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> 15 Empleados</li>
-               <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Productos Ilimitados</li>
-               <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Reportes Avanzados</li>
-               <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Soporte Prioritario</li>
-             </ul>
-             <button 
-               onClick={() => onSelectPlan('basic_mxn')}
-               disabled={isLoading}
-               className="w-full py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-transform active:scale-95 flex justify-center items-center gap-2"
-             >
-               {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Elegir Emprendedor'}
-             </button>
-          </div>
+            {/* Plan Emprendedor */}
+            <div className={`border-2 rounded-xl p-6 flex flex-col relative shadow-lg transform ${isBasic ? 'border-slate-300 scale-100' : 'border-indigo-500 bg-indigo-50/30 scale-105'}`}>
+               {!isBasic && !isPro && (
+                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
+                   MÁS POPULAR
+                 </div>
+               )}
+               <div className="mb-4 mt-2">
+                 <h3 className="font-bold text-lg text-indigo-900">Emprendedor</h3>
+                 <p className="text-3xl font-bold mt-2 text-indigo-700">$199 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
+               </div>
+               <ul className="space-y-3 mb-8 flex-1">
+                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> 15 Empleados</li>
+                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Productos Ilimitados</li>
+                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Reportes Avanzados</li>
+                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Soporte Prioritario</li>
+               </ul>
+               {isBasic ? (
+                 <button disabled className="w-full py-2 bg-slate-200 text-slate-500 font-bold rounded-lg cursor-not-allowed flex justify-center items-center gap-2">
+                   <CheckCircle size={18} /> Plan Actual
+                 </button>
+               ) : (
+                  isPro ? (
+                    <button disabled className="w-full py-2 bg-slate-100 text-slate-400 font-bold rounded-lg cursor-not-allowed">
+                      Incluido en Empresarial
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={() => onSelectPlan('basic_mxn')}
+                      disabled={isLoading}
+                      className="w-full py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-transform active:scale-95 flex justify-center items-center gap-2"
+                    >
+                      {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Elegir Emprendedor'}
+                    </button>
+                  )
+               )}
+            </div>
 
-          {/* Plan Empresarial */}
-          <div className="border border-slate-200 rounded-xl p-6 flex flex-col hover:border-amber-400 transition-colors">
-             <div className="mb-4">
-               <h3 className="font-bold text-lg text-slate-800">Empresarial</h3>
-               <p className="text-3xl font-bold mt-2 text-slate-900">$499 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
-             </div>
-             <ul className="space-y-3 mb-8 flex-1">
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Empleados Ilimitados</li>
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Múltiples Sucursales</li>
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> API de Acceso</li>
-               <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Soporte 24/7 Dedicado</li>
-             </ul>
-             <button 
-                onClick={() => onSelectPlan('pro_mxn')}
-                disabled={isLoading}
-                className="w-full py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-transform active:scale-95 flex justify-center items-center gap-2"
-             >
-                {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Elegir Empresarial'}
-             </button>
-          </div>
+            {/* Plan Empresarial */}
+            <div className={`border rounded-xl p-6 flex flex-col transition-colors ${isPro ? 'border-amber-400 ring-1 ring-amber-400 bg-amber-50/20' : 'border-slate-200 hover:border-amber-400'}`}>
+               <div className="mb-4">
+                 <h3 className="font-bold text-lg text-slate-800">Empresarial</h3>
+                 <p className="text-3xl font-bold mt-2 text-slate-900">$499 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
+               </div>
+               <ul className="space-y-3 mb-8 flex-1">
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Empleados Ilimitados</li>
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Múltiples Sucursales</li>
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> API de Acceso</li>
+                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Soporte 24/7 Dedicado</li>
+               </ul>
+               {isPro ? (
+                 <button disabled className="w-full py-2 bg-amber-100 text-amber-700 font-bold rounded-lg cursor-not-allowed flex justify-center items-center gap-2">
+                   <Crown size={18} /> Plan Actual
+                 </button>
+               ) : (
+                 <button 
+                    onClick={() => onSelectPlan('pro_mxn')}
+                    disabled={isLoading}
+                    className="w-full py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-transform active:scale-95 flex justify-center items-center gap-2"
+                 >
+                    {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Elegir Empresarial'}
+                 </button>
+               )}
+            </div>
 
-       </div>
-       <div className="p-4 bg-slate-50 text-center text-xs text-slate-400">
-         * Precios más IVA. La facturación es mensual y se puede cancelar en cualquier momento.
-       </div>
+         </div>
+         <div className="p-4 bg-slate-50 text-center text-xs text-slate-400">
+           * Precios más IVA. La facturación es mensual y se puede cancelar en cualquier momento.
+         </div>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default StoreManager;

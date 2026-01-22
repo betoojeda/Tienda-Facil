@@ -26,7 +26,7 @@ export interface Sale {
   date: string;
   total: number;
   items: CartItem[];
-  paymentMethod: 'cash' | 'card';
+  paymentMethod: 'cash' | 'card' | 'paypal' | 'transfer';
   soldBy: string; // username
 }
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Product, Store } from '../types';
-import { Plus, Edit2, Trash, Save, X, Crown, FileSpreadsheet, AlertTriangle, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Filter, Loader2, ChevronLeft, ChevronRight, Package, UtensilsCrossed, Search } from 'lucide-react';
+import { Plus, Edit2, Trash, Save, X, Crown, FileSpreadsheet, AlertTriangle, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown, Filter, Loader2, ChevronLeft, ChevronRight, Package, UtensilsCrossed, Search, FileQuestion, Download } from 'lucide-react';
 import { importProductsFromCSV, importProductsFromExcel, getSystemConfig } from '../services/storageService';
 
 interface InventoryProps {
@@ -225,6 +225,25 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
     }
   };
 
+  // --- Generate and Download Template ---
+  const handleDownloadTemplate = () => {
+    const csvContent = 
+`Codigo,Nombre,Costo,Precio,Mayoreo,Stock,Minimo,Categoria
+EJ-001,Coca Cola 600ml,12.50,18.00,16.50,48,10,Bebidas
+EJ-002,Sabritas Sal 45g,11.00,16.00,14.50,24,5,Botanas
+EJ-003,Aceite 1L,35.00,45.00,42.00,20,5,Abarrotes
+EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'plantilla_productos_ejemplo.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -319,21 +338,21 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
           </div>
         </div>
         
-        <div className="flex gap-3 flex-wrap items-center">
+        <div className="flex gap-3 flex-wrap items-center w-full xl:w-auto">
           {/* Search Box */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-100 transition-shadow">
+          <div className="flex-1 xl:flex-none flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-100 transition-shadow min-w-[200px]">
              <Search size={16} className="text-slate-400" />
              <input 
               type="text" 
               placeholder="Buscar..."
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
-              className="bg-transparent text-sm text-slate-700 outline-none w-32 sm:w-48"
+              className="bg-transparent text-sm text-slate-700 outline-none w-full"
              />
           </div>
 
           {/* Category Filter */}
-          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-100 transition-shadow">
+          <div className="hidden sm:flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-100 transition-shadow">
             <Filter size={16} className="text-indigo-500" />
             <span className="text-xs font-bold text-slate-500 mr-1 hidden sm:inline">Categoría:</span>
             <select 
@@ -359,35 +378,48 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
 
           <div className="h-6 w-px bg-slate-200 mx-1 hidden sm:block"></div>
 
-          <div className="relative">
-             <input 
-               type="file" 
-               accept=".csv, .xlsx, .xls" 
-               className="hidden" 
-               ref={fileInputRef}
-               onChange={handleFileUpload}
-             />
-             <button 
-               onClick={() => !isSaving && fileInputRef.current?.click()}
-               className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 shadow-sm transition-colors text-sm disabled:opacity-70"
-               disabled={isSaving}
-             >
-               {isSaving ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
-               <span className="hidden sm:inline">Importar</span>
-             </button>
-          </div>
+          <div className="flex gap-2">
+            {/* Download Template Button */}
+            <button 
+              onClick={handleDownloadTemplate}
+              className="bg-slate-100 text-slate-600 px-3 py-2 rounded-lg flex items-center gap-2 hover:bg-slate-200 shadow-sm transition-colors text-sm border border-slate-200"
+              title="Descargar Plantilla de Ejemplo"
+            >
+              <Download size={18} />
+              <span className="hidden sm:inline">Plantilla</span>
+            </button>
 
-          <button 
-            onClick={handleAdd}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors text-sm ${
-              isFreeTier && productCount >= freeLimit 
-              ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
-              : 'bg-indigo-600 text-white hover:bg-indigo-700'
-            }`}
-          >
-            <Plus size={18} />
-            <span className="hidden sm:inline">{term.new}</span>
-          </button>
+            <div className="relative">
+               <input 
+                 type="file" 
+                 accept=".csv, .xlsx, .xls" 
+                 className="hidden" 
+                 ref={fileInputRef}
+                 onChange={handleFileUpload}
+               />
+               <button 
+                 onClick={() => !isSaving && fileInputRef.current?.click()}
+                 className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 shadow-sm transition-colors text-sm disabled:opacity-70"
+                 disabled={isSaving}
+                 title="Importar Excel o CSV"
+               >
+                 {isSaving ? <Loader2 size={18} className="animate-spin" /> : <FileSpreadsheet size={18} />}
+                 <span className="hidden sm:inline">Importar</span>
+               </button>
+            </div>
+
+            <button 
+              onClick={handleAdd}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors text-sm ${
+                isFreeTier && productCount >= freeLimit 
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed' 
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+              }`}
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">{term.new}</span>
+            </button>
+          </div>
         </div>
       </div>
 

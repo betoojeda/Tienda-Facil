@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { Store, UserPlus, LogIn, KeyRound, Mail, ChefHat, ShoppingBag, Loader2, ArrowLeft } from 'lucide-react';
+import { Store, UserPlus, LogIn, KeyRound, Mail, ChefHat, ShoppingBag, Loader2, ArrowLeft, AlertCircle, CheckCircle, ShieldAlert } from 'lucide-react';
 import * as storage from '../services/storageService';
 
 interface LoginProps {
@@ -30,8 +30,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
   const [email, setEmail] = useState('');
   const [businessType, setBusinessType] = useState<'restaurant' | 'retail'>('retail');
   
+  // Error & Status State
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  
+  // Security Simulation State
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockTimer, setLockTimer] = useState(0);
 
   const resetForm = () => {
     setError('');
@@ -53,38 +59,56 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
     e.preventDefault();
     setError('');
     setSuccessMsg('');
+
+    // --- SECURITY CHECK (Account Lockout) ---
+    if (isLocked) {
+      setError(`Demasiados intentos. Por favor espera ${lockTimer} segundos.`);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      // --- RECOVERY LOGIC ---
+      // ===========================
+      // RECOVERY LOGIC
+      // ===========================
       if (currentView === 'RECOVER') {
         if (!username || !email) {
-          setError('Ingresa usuario y correo.');
+          setError('Para recuperar tu cuenta, necesitamos tu usuario y correo.');
           setIsLoading(false);
           return;
         }
 
         if (username === 'admin' && email === 'betoojeda2008@gmail.com') {
-          setSuccessMsg('Correo de recuperación enviado. (Simulado: Tu clave es admin2026*)');
+          setSuccessMsg('¡Listo! Hemos enviado la clave temporal a tu correo.');
         } else {
           // Verify against async storage
           const users = await storage.getUsers();
           const userExists = users.find(u => u.username === username);
           
           if (userExists && email.includes('@')) {
-            setSuccessMsg(`Si los datos coinciden, hemos enviado instrucciones a ${email}`);
+            setSuccessMsg(`Si los datos son correctos, recibirás un correo en ${email} con los pasos a seguir.`);
           } else {
-            setError('Usuario o correo no coinciden.');
+            // Generic message for security
+            setSuccessMsg(`Si los datos son correctos, recibirás un correo en ${email} con los pasos a seguir.`);
           }
         }
         setIsLoading(false);
         return;
       }
 
-      // --- REGISTER LOGIC ---
+      // ===========================
+      // REGISTRATION LOGIC
+      // ===========================
       if (currentView === 'REGISTER') {
         if (!username || !password || !firstName || !lastName || !email) {
-          setError('Por favor completa todos los campos.');
+          setError('Ups, faltan datos. Por favor completa todos los campos.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (password.length < 4) {
+          setError('La contraseña es muy corta. Usa al menos 4 caracteres.');
           setIsLoading(false);
           return;
         }
@@ -101,42 +125,72 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
         if (newUser) {
           onLogin(newUser);
         } else {
-          setError('El usuario ya existe. Intenta otro nombre de usuario.');
+          setError(`El usuario "${username}" ya existe. Intenta con otro nombre.`);
         }
         setIsLoading(false);
         return;
       }
 
-      // --- LOGIN LOGIC ---
+      // ===========================
+      // LOGIN LOGIC
+      // ===========================
       if (!username || !password) {
-        setError('Por favor completa todos los campos');
+        setError('Por favor ingresa tu usuario y contraseña.');
         setIsLoading(false);
         return;
       }
       
-      // Verificación robusta de errores
       const users = await storage.getUsers();
       const userAccount = users.find(u => u.username === username);
 
+      // Scenario 1: User does not exist
       if (!userAccount) {
-        setError('El usuario ingresado no existe. Verifica el nombre o regístrate.');
+        setError('No encontramos una cuenta con ese usuario. ¿Quizás quisiste decir otro nombre?');
         setIsLoading(false);
         return;
       }
 
+      // Scenario 2: Wrong Password
       if (userAccount.password !== password) {
-        setError('La contraseña es incorrecta. Inténtalo de nuevo.');
+        const newAttempts = failedAttempts + 1;
+        setFailedAttempts(newAttempts);
+
+        if (newAttempts >= 5) {
+          // Lock account logic
+          setIsLocked(true);
+          setLockTimer(30);
+          setError('Cuenta bloqueada temporalmente por seguridad (30s).');
+          
+          const interval = setInterval(() => {
+             setLockTimer((prev) => {
+               if (prev <= 1) {
+                 clearInterval(interval);
+                 setIsLocked(false);
+                 setFailedAttempts(0);
+                 setError('');
+                 return 0;
+               }
+               return prev - 1;
+             });
+          }, 1000);
+        } else if (newAttempts >= 3) {
+          setError(`Contraseña incorrecta. Advertencia: ${5 - newAttempts} intentos restantes antes del bloqueo.`);
+        } else {
+          setError('La contraseña no coincide. Verifica mayúsculas y minúsculas.');
+        }
+
         setIsLoading(false);
         return;
       }
 
-      // Login exitoso
+      // Scenario 3: Success
+      setFailedAttempts(0); // Reset attempts on success
       onLogin(userAccount);
 
     } catch (err) {
-      setError("Error de conexión con la base de datos.");
+      setError("Error de conexión. Por favor intenta de nuevo más tarde.");
     } finally {
-      setIsLoading(false);
+      if (!isLocked) setIsLoading(false);
     }
   };
 
@@ -159,10 +213,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
             <Store size={40} className="text-indigo-600" />
           </div>
           <h1 className="text-2xl font-bold text-slate-800">Tienda-Facil</h1>
-          <p className="text-slate-500 mt-2">
-            {currentView === 'REGISTER' && 'Crea tu cuenta para comenzar'}
+          <p className="text-slate-500 mt-2 font-medium">
+            {currentView === 'REGISTER' && 'Crea tu cuenta en segundos'}
             {currentView === 'LOGIN' && 'Bienvenido de nuevo'}
-            {currentView === 'RECOVER' && 'Recuperar Contraseña'}
+            {currentView === 'RECOVER' && 'Recuperar Acceso'}
           </p>
         </div>
         
@@ -173,29 +227,29 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                   <label className="text-sm font-medium text-slate-700">Nombre</label>
+                   <label className="text-xs font-bold text-slate-500 uppercase">Nombre</label>
                    <input
                      type="text"
                      value={firstName}
                      onChange={(e) => setFirstName(e.target.value)}
                      className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none"
-                     placeholder="Juan"
+                     placeholder="Ej. Juan"
                    />
                 </div>
                 <div className="space-y-2">
-                   <label className="text-sm font-medium text-slate-700">Apellido</label>
+                   <label className="text-xs font-bold text-slate-500 uppercase">Apellido</label>
                    <input
                      type="text"
                      value={lastName}
                      onChange={(e) => setLastName(e.target.value)}
                      className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none"
-                     placeholder="Pérez"
+                     placeholder="Ej. Pérez"
                    />
                 </div>
               </div>
 
               <div className="space-y-2">
-                 <label className="text-sm font-medium text-slate-700">Tipo de Negocio</label>
+                 <label className="text-xs font-bold text-slate-500 uppercase">Tipo de Negocio</label>
                  <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
@@ -220,19 +274,19 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
 
           {/* Common Fields */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-700">Usuario</label>
+            <label className="text-xs font-bold text-slate-500 uppercase">Usuario</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value.trim())}
               className="w-full px-4 py-3 rounded-lg border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-              placeholder="Nombre de usuario"
+              placeholder="Ingresa tu usuario"
             />
           </div>
 
           {(currentView === 'REGISTER' || currentView === 'RECOVER') && (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Correo Electrónico</label>
+              <label className="text-xs font-bold text-slate-500 uppercase">Correo Electrónico</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={18} />
                 <input
@@ -249,12 +303,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
           {currentView !== 'RECOVER' && (
             <div className="space-y-2">
               <div className="flex justify-between">
-                <label className="text-sm font-medium text-slate-700">Contraseña</label>
+                <label className="text-xs font-bold text-slate-500 uppercase">Contraseña</label>
                 {currentView === 'LOGIN' && (
                   <button 
                     type="button" 
                     onClick={() => handleSwitchView('RECOVER')}
-                    className="text-xs text-indigo-600 hover:underline"
+                    className="text-xs text-indigo-600 hover:underline font-medium"
                   >
                     ¿Olvidaste tu contraseña?
                   </button>
@@ -270,13 +324,40 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
             </div>
           )}
 
-          {error && <p className="text-red-500 text-sm text-center bg-red-50 py-2 rounded border border-red-100 animate-pulse">{error}</p>}
-          {successMsg && <p className="text-green-600 text-sm text-center bg-green-50 py-2 rounded border border-green-100">{successMsg}</p>}
+          {/* Error Message UI */}
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1">
+               {isLocked ? (
+                 <ShieldAlert className="text-red-600 flex-shrink-0 mt-0.5" size={18} />
+               ) : (
+                 <AlertCircle className="text-red-600 flex-shrink-0 mt-0.5" size={18} />
+               )}
+               <div>
+                  <h4 className="text-xs font-bold text-red-800 uppercase mb-0.5">Atención</h4>
+                  <p className="text-sm text-red-700 font-medium leading-tight">{error}</p>
+               </div>
+            </div>
+          )}
+
+          {/* Success Message UI */}
+          {successMsg && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-1">
+               <CheckCircle className="text-green-600 flex-shrink-0 mt-0.5" size={18} />
+               <div>
+                  <h4 className="text-xs font-bold text-green-800 uppercase mb-0.5">Éxito</h4>
+                  <p className="text-sm text-green-700 font-medium leading-tight">{successMsg}</p>
+               </div>
+            </div>
+          )}
 
           <button
             type="submit"
-            disabled={isLoading}
-            className="w-full bg-indigo-600 text-white py-3 rounded-lg font-bold text-lg hover:bg-indigo-700 hover:scale-[1.02] transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg disabled:opacity-70 disabled:cursor-wait"
+            disabled={isLoading || isLocked}
+            className={`w-full py-3 rounded-lg font-bold text-lg transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg ${
+              isLocked 
+              ? 'bg-slate-400 text-white cursor-not-allowed' 
+              : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-[1.02]'
+            }`}
           >
             {isLoading ? (
                <Loader2 className="animate-spin" />
@@ -286,7 +367,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
                   <><span>Crear Cuenta</span><UserPlus size={20} /></>
                 )}
                 {currentView === 'LOGIN' && (
-                  <><span>Ingresar</span><LogIn size={20} /></>
+                  <><span>{isLocked ? `Espera ${lockTimer}s` : 'Ingresar'}</span><LogIn size={20} /></>
                 )}
                 {currentView === 'RECOVER' && (
                   <><span>Enviar Correo</span><KeyRound size={20} /></>
@@ -300,9 +381,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, onBack, initialView = 'LOGIN' })
                 <button 
                   type="button"
                   onClick={() => handleSwitchView('LOGIN')}
-                  className="text-slate-500 font-medium hover:text-slate-700 text-sm"
+                  className="text-slate-500 font-medium hover:text-slate-700 text-sm flex items-center justify-center gap-1 mx-auto"
                 >
-                  Volver al inicio de sesión
+                  <ArrowLeft size={14} /> Volver al inicio de sesión
                 </button>
              ) : (
                <button 

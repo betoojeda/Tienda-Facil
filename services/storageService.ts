@@ -84,6 +84,7 @@ export const getGlobalStats = async () => {
   const users = await getUsers();
   const stores = await getStores();
   const allSales: Sale[] = safeParse(SALES_KEY, []);
+  const allProducts: Product[] = safeParse(PRODUCTS_KEY, []); // Load all products
   const config = await getSystemConfig();
   
   const totalRevenue = allSales.reduce((acc, curr) => acc + curr.total, 0);
@@ -96,7 +97,22 @@ export const getGlobalStats = async () => {
     freeTierLimit: config.freeTierLimit,
     storesList: stores.map(s => {
       const owner = users.find(u => u.id === s.ownerId);
-      return { ...s, ownerName: owner?.username || 'Desconocido' };
+      
+      // Calculate inventory stats per store
+      const storeProducts = allProducts.filter(p => p.storeId === s.id);
+      const productCount = storeProducts.length;
+      const totalStock = storeProducts.reduce((acc, p) => acc + (p.stock || 0), 0);
+      const inventoryValue = storeProducts.reduce((acc, p) => acc + ((p.costPrice || 0) * (p.stock || 0)), 0);
+
+      return { 
+        ...s, 
+        ownerName: owner?.username || 'Desconocido',
+        stats: {
+          productCount,
+          totalStock,
+          inventoryValue
+        }
+      };
     })
   });
 };
@@ -213,6 +229,19 @@ export const upgradeStoreSubscription = async (storeId: string, planId: string =
     localStorage.setItem(STORES_KEY, JSON.stringify(stores));
   }
   await simulateNetwork(null);
+};
+
+// New Function for Admin to edit everything about a store
+export const adminUpdateStore = async (storeId: string, updates: Partial<Store>): Promise<boolean> => {
+  const stores = await getStores();
+  const index = stores.findIndex(s => s.id === storeId);
+  
+  if (index >= 0) {
+    stores[index] = { ...stores[index], ...updates };
+    localStorage.setItem(STORES_KEY, JSON.stringify(stores));
+    return simulateNetwork(true);
+  }
+  return simulateNetwork(false);
 };
 
 export const getUserStores = async (user: User): Promise<Store[]> => {

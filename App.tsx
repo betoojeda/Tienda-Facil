@@ -17,7 +17,7 @@ const App: React.FC = () => {
   const [currentStore, setCurrentStore] = useState<Store | null>(null);
   // Change initial view to LANDING
   const [view, setView] = useState<ViewState>(ViewState.LANDING);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true); // Default open on desktop
   const [isLoading, setIsLoading] = useState(false);
   
   // App Data State
@@ -112,7 +112,7 @@ const App: React.FC = () => {
     setCurrentStore(null);
     // Redirect to LANDING instead of LOGIN
     setView(ViewState.LANDING);
-    setIsSidebarOpen(false);
+    // setIsSidebarOpen(false); // No longer needed as Sidebar handles its own responsive state
   };
 
   const handleRecordSale = async (saleData: Omit<Sale, 'storeId' | 'soldBy'>) => {
@@ -214,7 +214,7 @@ const App: React.FC = () => {
             storeName="ADMIN PANEL"
             userRole={user.role}
           />
-          <main className="flex-1 flex flex-col min-w-0 overflow-y-auto p-4 md:p-6">
+          <main className="flex-1 flex flex-col min-w-0 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6">
             <div className="h-16 md:hidden flex-shrink-0" />
             <SuperAdminDashboard />
           </main>
@@ -234,7 +234,8 @@ const App: React.FC = () => {
           <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
             <div className="h-16 md:hidden flex-shrink-0" />
             
-            <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+            {/* Added pb-24 for mobile bottom nav spacing */}
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 md:pb-6">
               <div className="fixed top-20 right-4 z-40 md:top-6 md:right-8">
                 <InstallButton />
               </div>

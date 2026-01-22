@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem, Sale } from '../types';
-import { Plus, Minus, Trash2, CreditCard, Banknote, Search, ShoppingBag, Eye, X } from 'lucide-react';
+import { Plus, Minus, Trash2, CreditCard, Banknote, Search, ShoppingBag, Eye, X, QrCode, Globe } from 'lucide-react';
 
 interface POSProps {
   products: Product[];
@@ -12,6 +12,9 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+  
+  // State for "Processing Payment" modal
+  const [isProcessingPayment, setIsProcessingPayment] = useState<{method: string, total: number} | null>(null);
 
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
 
@@ -43,10 +46,21 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
 
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
-  const handleCheckout = (method: 'cash' | 'card') => {
+  const initiatePayment = (method: 'cash' | 'card' | 'paypal' | 'transfer') => {
     if (cart.length === 0) return;
 
-    const newSale = {
+    if (method === 'paypal' || method === 'transfer') {
+      // Open modal for online payments
+      setIsProcessingPayment({ method, total: cartTotal });
+      return;
+    }
+
+    // Direct checkout for cash/card (simulated immediately)
+    completeSale(method);
+  };
+
+  const completeSale = (method: 'cash' | 'card' | 'paypal' | 'transfer') => {
+    const newSale: Omit<Sale, 'storeId' | 'soldBy'> = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
       total: cartTotal,
@@ -56,7 +70,13 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
 
     onRecordSale(newSale);
     setCart([]);
-    alert(`¡Venta registrada con éxito! Total: $${cartTotal.toFixed(2)}`);
+    setIsProcessingPayment(null);
+    
+    // Nice feedback message
+    const methodNames: Record<string, string> = {
+      cash: 'Efectivo', card: 'Tarjeta', paypal: 'PayPal', transfer: 'Mercado Pago / Transf.'
+    };
+    alert(`¡Venta registrada con éxito!\nMétodo: ${methodNames[method]}\nTotal: $${cartTotal.toFixed(2)}`);
   };
 
   const filteredProducts = products.filter(p => 
@@ -134,9 +154,9 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
               
               <div className="mb-1">
                  <div className="flex justify-between items-start">
-                   <span className="text-[10px] uppercase font-bold text-slate-400 block">{product.code}</span>
+                   <span className="text-xs font-bold text-slate-400 block">{product.code}</span>
                    {!product.image && (
-                     <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1 rounded">Stock: {product.stock}</span>
+                     <span className="text-xs font-bold text-slate-400 bg-slate-100 px-1 rounded">Stock: {product.stock}</span>
                    )}
                  </div>
                  <h3 className="font-semibold text-slate-800 leading-tight line-clamp-2">{product.name}</h3>
@@ -192,22 +212,42 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
             <span className="text-2xl font-bold text-slate-900">${cartTotal.toFixed(2)}</span>
           </div>
           
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <button 
-              onClick={() => handleCheckout('cash')}
+              onClick={() => initiatePayment('cash')}
               disabled={cart.length === 0}
-              className="flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
-              <Banknote size={20} />
+              <Banknote size={18} />
               <span>Efectivo</span>
             </button>
             <button 
-              onClick={() => handleCheckout('card')}
+              onClick={() => initiatePayment('card')}
               disabled={cart.length === 0}
-              className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
-              <CreditCard size={20} />
+              <CreditCard size={18} />
               <span>Tarjeta</span>
+            </button>
+            
+            {/* New Payment Methods */}
+            <button 
+              onClick={() => initiatePayment('paypal')}
+              disabled={cart.length === 0}
+              className="flex items-center justify-center gap-2 bg-[#0070ba] text-white py-3 rounded-lg hover:bg-[#005ea6] disabled:opacity-50 transition-colors"
+              title="Pagar con PayPal"
+            >
+              <Globe size={18} />
+              <span>PayPal</span>
+            </button>
+            <button 
+              onClick={() => initiatePayment('transfer')}
+              disabled={cart.length === 0}
+              className="flex items-center justify-center gap-2 bg-[#009ee3] text-white py-3 rounded-lg hover:bg-[#008bc7] disabled:opacity-50 transition-colors"
+              title="Mercado Pago / Transferencia"
+            >
+              <QrCode size={18} />
+              <span className="text-xs">MercadoPago</span>
             </button>
           </div>
         </div>
@@ -275,6 +315,63 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
                </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Online Payment Simulator Modal */}
+      {isProcessingPayment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in">
+           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-in zoom-in-95">
+              <div className="mb-4 flex justify-center">
+                {isProcessingPayment.method === 'paypal' ? (
+                   <div className="bg-blue-50 p-4 rounded-full text-[#0070ba]"><Globe size={48} /></div>
+                ) : (
+                   <div className="bg-blue-50 p-4 rounded-full text-[#009ee3]"><QrCode size={48} /></div>
+                )}
+              </div>
+              
+              <h2 className="text-xl font-bold text-slate-900 mb-2">
+                Cobro con {isProcessingPayment.method === 'paypal' ? 'PayPal' : 'Mercado Pago'}
+              </h2>
+              <p className="text-slate-500 text-sm mb-6">
+                Muestra el código QR al cliente o envía el enlace de pago por un total de:
+                <br/>
+                <span className="text-2xl font-bold text-slate-900 block mt-2">${isProcessingPayment.total.toFixed(2)}</span>
+              </p>
+
+              {/* Simulation Actions */}
+              <div className="space-y-3">
+                 <button 
+                   onClick={() => {
+                      // Here you would normally open the real payment link
+                      // window.open('https://paypal.me/tu_usuario/' + isProcessingPayment.total, '_blank');
+                      alert("Simulación: Abriendo pasarela de pago en nueva pestaña...");
+                   }}
+                   className="w-full py-3 rounded-lg font-bold border border-slate-200 hover:bg-slate-50 text-slate-700 flex items-center justify-center gap-2"
+                 >
+                   Generar / Abrir Enlace
+                 </button>
+
+                 <div className="relative my-4">
+                    <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
+                    <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-500">Confirmación</span></div>
+                 </div>
+
+                 <button 
+                   onClick={() => completeSale(isProcessingPayment.method as any)}
+                   className="w-full py-3 rounded-lg font-bold bg-green-600 text-white hover:bg-green-700 flex items-center justify-center gap-2"
+                 >
+                   Confirmar Pago Recibido
+                 </button>
+                 
+                 <button 
+                   onClick={() => setIsProcessingPayment(null)}
+                   className="w-full py-2 text-sm text-red-500 font-medium hover:underline"
+                 >
+                   Cancelar
+                 </button>
+              </div>
+           </div>
         </div>
       )}
 
