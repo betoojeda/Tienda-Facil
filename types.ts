@@ -52,6 +52,22 @@ export interface Store {
   createdAt?: string;
 }
 
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  price: number;
+  currency: string;
+  maxEmployees: number; // -1 for unlimited
+  maxProducts: number;  // -1 for unlimited
+  features: string[];
+  isPopular?: boolean;
+}
+
+export interface SystemConfig {
+  freeTierLimit: number; // Legacy support, mapped to plan 'free' maxProducts
+  plans: SubscriptionPlan[];
+}
+
 export enum ViewState {
   LANDING = 'LANDING',
   LOGIN = 'LOGIN',

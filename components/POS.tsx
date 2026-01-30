@@ -44,6 +44,15 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
     }));
   };
 
+  const updateItemPrice = (productId: string, newPrice: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.id === productId) {
+        return { ...item, price: newPrice };
+      }
+      return item;
+    }));
+  };
+
   const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
   const initiatePayment = (method: 'cash' | 'card' | 'paypal' | 'transfer') => {
@@ -185,20 +194,39 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
           ) : (
             cart.map(item => (
               <div key={item.id} className="flex items-center gap-3 bg-white p-2 rounded-lg border border-slate-100">
-                <div className="flex-1">
-                  <p className="font-medium text-slate-800 text-sm">{item.name}</p>
-                  <p className="text-indigo-600 font-bold text-sm">${(item.price * item.quantity).toFixed(2)}</p>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-slate-800 text-sm truncate">{item.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                     <span className="text-xs text-slate-400">Precio:</span>
+                     <div className="relative">
+                       <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">$</span>
+                       <input 
+                         type="number"
+                         min="0"
+                         step="any"
+                         value={item.price}
+                         onChange={(e) => updateItemPrice(item.id, parseFloat(e.target.value) || 0)}
+                         onFocus={(e) => e.target.select()}
+                         className="w-20 pl-4 pr-1 py-0.5 text-sm border border-slate-200 rounded focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-indigo-600 bg-slate-50"
+                       />
+                     </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:bg-slate-100 rounded">
-                    <Minus size={16} className="text-slate-500" />
-                  </button>
-                  <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:bg-slate-100 rounded">
-                    <Plus size={16} className="text-slate-500" />
-                  </button>
+                <div className="flex flex-col items-end gap-1">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => updateQuantity(item.id, -1)} className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded border border-slate-200 bg-white">
+                        <Minus size={14} className="text-slate-500" />
+                      </button>
+                      <span className="w-6 text-center text-sm font-bold text-slate-700">{item.quantity}</span>
+                      <button onClick={() => updateQuantity(item.id, 1)} className="w-7 h-7 flex items-center justify-center hover:bg-slate-100 rounded border border-slate-200 bg-white">
+                        <Plus size={14} className="text-slate-500" />
+                      </button>
+                    </div>
+                    <div className="text-xs font-medium text-slate-500">
+                      Total: ${(item.price * item.quantity).toFixed(2)}
+                    </div>
                 </div>
-                <button onClick={() => removeFromCart(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                <button onClick={() => removeFromCart(item.id)} className="p-2 text-red-500 hover:bg-red-50 rounded transition-colors" title="Eliminar">
                   <Trash2 size={18} />
                 </button>
               </div>

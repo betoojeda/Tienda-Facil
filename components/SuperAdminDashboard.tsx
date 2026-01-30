@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { getGlobalStats, getUsers, updateUserPassword, updateSystemConfig, adminUpdateStore } from '../services/storageService';
-import { Users, Store, DollarSign, ShoppingBag, TrendingUp, Lock, Key, X, Save, Settings, RefreshCw, ChevronDown, ChevronUp, Calendar, Clock, CreditCard, Loader2, Edit, Package, AlertTriangle } from 'lucide-react';
-import { User, Store as StoreType } from '../types';
+import { getGlobalStats, getUsers, updateUserPassword, updateSystemConfig, adminUpdateStore, getSystemConfig } from '../services/storageService';
+import { Users, Store, DollarSign, ShoppingBag, TrendingUp, Lock, Key, X, Save, Settings, RefreshCw, ChevronDown, ChevronUp, Calendar, Clock, CreditCard, Loader2, Edit, Package, AlertTriangle, ListChecks } from 'lucide-react';
+import { User, Store as StoreType, SubscriptionPlan } from '../types';
 
 const SuperAdminDashboard: React.FC = () => {
   const [stats, setStats] = useState<any>(null);
   const [userList, setUserList] = useState<User[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
   // Modal State: Password
@@ -31,9 +32,12 @@ const SuperAdminDashboard: React.FC = () => {
     setIsLoading(true);
     const globalStats = await getGlobalStats();
     const users = await getUsers();
+    const config = await getSystemConfig();
+    
     setStats(globalStats);
     setUserList(users);
-    setFreeTierLimitInput(globalStats.freeTierLimit);
+    setPlans(config.plans);
+    setFreeTierLimitInput(config.freeTierLimit);
     setIsLoading(false);
   };
 
@@ -99,6 +103,20 @@ const SuperAdminDashboard: React.FC = () => {
     await refreshData();
     setIsLoading(false);
     alert("Configuración actualizada correctamente.");
+  };
+  
+  const handleUpdatePlan = (index: number, field: keyof SubscriptionPlan, value: any) => {
+    const newPlans = [...plans];
+    newPlans[index] = { ...newPlans[index], [field]: value };
+    setPlans(newPlans);
+  };
+
+  const handleSavePlans = async () => {
+    setIsLoading(true);
+    await updateSystemConfig({ plans: plans });
+    await refreshData();
+    setIsLoading(false);
+    alert("Planes actualizados correctamente.");
   };
 
   const toggleStoreRow = (storeId: string) => {
@@ -167,35 +185,76 @@ const SuperAdminDashboard: React.FC = () => {
           <p className="text-3xl font-bold text-slate-900">${stats.totalRevenue.toFixed(2)}</p>
         </div>
       </div>
-
-      {/* System Configuration Section */}
+      
+      {/* Plans Management Section */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Settings size={20} />
-            Configuración del Sistema
+            <ListChecks size={20} />
+            Gestión de Planes de Suscripción
           </h2>
         </div>
-        <div className="p-6 flex items-end gap-4 flex-wrap">
-           <div>
-             <label className="block text-sm font-medium text-slate-700 mb-2">
-               Límite de Productos (Plan Gratuito)
-             </label>
-             <input 
-               type="number" 
-               value={freeTierLimitInput}
-               onChange={(e) => setFreeTierLimitInput(parseInt(e.target.value))}
-               className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none w-48"
-             />
+        <div className="p-6 overflow-x-auto">
+           <table className="w-full text-left">
+             <thead>
+               <tr className="border-b border-slate-200">
+                 <th className="pb-3 text-sm font-semibold text-slate-600">ID Plan</th>
+                 <th className="pb-3 text-sm font-semibold text-slate-600">Nombre</th>
+                 <th className="pb-3 text-sm font-semibold text-slate-600">Precio (MXN)</th>
+                 <th className="pb-3 text-sm font-semibold text-slate-600">Máx. Empleados (-1 inf)</th>
+                 <th className="pb-3 text-sm font-semibold text-slate-600">Máx. Productos (-1 inf)</th>
+               </tr>
+             </thead>
+             <tbody className="divide-y divide-slate-100">
+               {plans.map((plan, idx) => (
+                 <tr key={plan.id}>
+                   <td className="py-3 px-2 text-xs font-mono text-slate-500">{plan.id}</td>
+                   <td className="py-3 px-2">
+                     <input 
+                       type="text" 
+                       value={plan.name}
+                       onChange={(e) => handleUpdatePlan(idx, 'name', e.target.value)}
+                       className="w-full border rounded px-2 py-1 text-sm"
+                     />
+                   </td>
+                   <td className="py-3 px-2">
+                     <input 
+                       type="number" 
+                       value={plan.price}
+                       onChange={(e) => handleUpdatePlan(idx, 'price', parseFloat(e.target.value))}
+                       className="w-24 border rounded px-2 py-1 text-sm font-bold text-indigo-700"
+                     />
+                   </td>
+                   <td className="py-3 px-2">
+                     <input 
+                       type="number" 
+                       value={plan.maxEmployees}
+                       onChange={(e) => handleUpdatePlan(idx, 'maxEmployees', parseInt(e.target.value))}
+                       className="w-24 border rounded px-2 py-1 text-sm"
+                     />
+                   </td>
+                   <td className="py-3 px-2">
+                     <input 
+                       type="number" 
+                       value={plan.maxProducts}
+                       onChange={(e) => handleUpdatePlan(idx, 'maxProducts', parseInt(e.target.value))}
+                       className="w-24 border rounded px-2 py-1 text-sm"
+                     />
+                   </td>
+                 </tr>
+               ))}
+             </tbody>
+           </table>
+           <div className="mt-4 flex justify-end">
+             <button 
+               onClick={handleSavePlans}
+               disabled={isLoading}
+               className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 shadow-sm disabled:opacity-50"
+             >
+               <Save size={18} />
+               Guardar Cambios en Planes
+             </button>
            </div>
-           <button 
-             onClick={handleUpdateConfig}
-             disabled={isLoading}
-             className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 flex items-center gap-2 h-[42px] disabled:opacity-50"
-           >
-             <Save size={18} />
-             Actualizar Configuración
-           </button>
         </div>
       </div>
 
@@ -485,9 +544,9 @@ const SuperAdminDashboard: React.FC = () => {
                       onChange={e => setEditingStore({...editingStore, planId: e.target.value})}
                       className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
                     >
-                      <option value="free">free (Básico)</option>
-                      <option value="basic_mxn">Emprendedor (15 emp)</option>
-                      <option value="pro_mxn">Empresarial (Ilimitado)</option>
+                      {plans.map(p => (
+                         <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
                     </select>
                  </div>
               </div>

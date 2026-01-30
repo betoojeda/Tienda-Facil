@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Store, User } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Store, User, SubscriptionPlan } from '../types';
 import { Plus, Users, ArrowRight, Store as StoreIcon, Settings, Crown, CheckCircle, Loader2, UserPlus, Link as LinkIcon, Calendar, Clock, X, Check, ChevronDown, ChevronUp, Briefcase } from 'lucide-react';
 import * as storage from '../services/storageService';
 
@@ -15,6 +15,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
   const [isCreating, setIsCreating] = useState(false);
   const [newStoreName, setNewStoreName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   
   // Managing staff state
   const [manageStaffStore, setManageStaffStore] = useState<Store | null>(null);
@@ -41,6 +42,15 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
 
   const [staffError, setStaffError] = useState('');
   const [staffSuccess, setStaffSuccess] = useState('');
+
+  // Fetch plans on load
+  useEffect(() => {
+    const fetchConfig = async () => {
+      const config = await storage.getSystemConfig();
+      setPlans(config.plans);
+    };
+    fetchConfig();
+  }, []);
 
   // --- Logic Grouping ---
   const ownedStores = availableStores.filter(s => s.ownerId === user.id);
@@ -161,12 +171,14 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
 
   // --- Sub-render: Store Card ---
   const renderStoreCard = (store: Store, isOwner: boolean) => {
+    const currentPlan = plans.find(p => p.id === store.planId) || plans.find(p => p.id === 'free');
     const isPremium = store.subscription === 'PREMIUM';
     const isExpanded = expandedStores.has(store.id);
     const isSelected = currentStore?.id === store.id;
     
-    // Logic to show upgrade button: Show if owner AND not on top tier (pro_mxn)
-    const showUpgradeButton = isOwner && store.planId !== 'pro_mxn';
+    // Logic to show upgrade button: Show if owner AND is not the most expensive plan
+    const mostExpensivePlan = plans.reduce((prev, current) => (prev.price > current.price) ? prev : current, plans[0]);
+    const showUpgradeButton = isOwner && currentPlan?.id !== mostExpensivePlan.id;
 
     return (
       <div 
@@ -199,7 +211,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
                 )}
               </h3>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                 {isPremium ? (store.planId === 'pro_mxn' ? 'Plan Empresarial' : 'Plan Emprendedor') : 'Plan Gratuito'}
+                 {currentPlan ? currentPlan.name : 'Plan Gratuito'}
               </p>
             </div>
           </div>
@@ -236,7 +248,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
                 <div className="bg-slate-50 p-3 rounded-lg">
                    <span className="block text-xs text-slate-400 uppercase font-bold mb-1">Empleados</span>
                    <span className="font-medium text-slate-700">
-                     {store.staffUsernames.length} {isPremium ? '' : '/ 5'}
+                     {store.staffUsernames.length} {currentPlan && currentPlan.maxEmployees !== -1 ? `/ ${currentPlan.maxEmployees}` : ''}
                    </span>
                 </div>
                 {isPremium && store.subscriptionExpiry && (
@@ -302,11 +314,13 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
 
   // --- MAIN RENDER: Staff Manager View ---
   if (manageStaffStore) {
+    const currentPlan = plans.find(p => p.id === manageStaffStore.planId) || plans.find(p => p.id === 'free');
     const isFree = manageStaffStore.subscription === 'FREE';
     const staffCount = manageStaffStore.staffUsernames.length;
-    const staffLimit = 5;
-    const isLimitReached = isFree && staffCount >= staffLimit;
-    const limitPercentage = Math.min((staffCount / staffLimit) * 100, 100);
+    const staffLimit = currentPlan ? currentPlan.maxEmployees : 5;
+    const isUnlimited = staffLimit === -1;
+    const isLimitReached = !isUnlimited && staffCount >= staffLimit;
+    const limitPercentage = isUnlimited ? 100 : Math.min((staffCount / staffLimit) * 100, 100);
 
     return (
       <div className="max-w-2xl mx-auto p-4 animate-in fade-in slide-in-from-bottom-4">
@@ -328,10 +342,10 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
                 <div className="flex justify-between items-end mb-2">
                   <span className="text-sm font-bold text-slate-600 uppercase">Capacidad de Empleados</span>
                   <span className={`text-sm font-bold ${isLimitReached ? 'text-red-600' : 'text-indigo-600'}`}>
-                    {isFree ? `${staffCount} / ${staffLimit}` : `${staffCount} / Ilimitado`}
+                    {isUnlimited ? `${staffCount} / Ilimitado` : `${staffCount} / ${staffLimit}`}
                   </span>
                 </div>
-                {isFree ? (
+                {!isUnlimited ? (
                   <div className="w-full bg-slate-200 rounded-full h-2.5">
                     <div 
                       className={`h-2.5 rounded-full ${isLimitReached ? 'bg-red-500' : 'bg-indigo-600'}`} 
@@ -346,7 +360,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
                 {isLimitReached && (
                   <div className="mt-2 text-xs text-red-500 font-medium flex items-center gap-1">
                      <Crown size={12} />
-                     Has alcanzado el límite del Plan Gratuito. Mejora a Premium para añadir más.
+                     Has alcanzado el límite de tu plan actual. Mejora tu plan para añadir más.
                   </div>
                 )}
              </div>
@@ -393,7 +407,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
                      <Crown size={48} className="mx-auto text-amber-500 mb-3" />
                      <h3 className="text-lg font-bold text-slate-800">Límite Alcanzado</h3>
                      <p className="text-slate-500 mb-4 max-w-xs mx-auto">
-                       El plan gratuito permite hasta 5 empleados. Desbloquea capacidad ilimitada mejorando tu plan.
+                       El plan {currentPlan?.name} permite hasta {staffLimit} empleados. Desbloquea más capacidad mejorando tu plan.
                      </p>
                      <button 
                         onClick={() => setShowPricing({ show: true, storeId: manageStaffStore.id, currentPlanId: manageStaffStore.planId })}
@@ -500,6 +514,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
             onSelectPlan={handleUpgrade}
             isLoading={isLoading}
             currentPlanId={manageStaffStore.planId}
+            plans={plans}
           />
         )}
       </div>
@@ -600,6 +615,7 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
            onSelectPlan={handleUpgrade}
            isLoading={isLoading}
            currentPlanId={showPricing.currentPlanId}
+           plans={plans}
          />
       )}
     </div>
@@ -607,14 +623,22 @@ const StoreManager: React.FC<StoreManagerProps> = ({ user, availableStores, curr
 };
 
 // --- Subcomponent: Pricing Modal ---
-const PricingModal = ({ onClose, onSelectPlan, isLoading, currentPlanId }: { onClose: () => void, onSelectPlan: (id: string) => void, isLoading: boolean, currentPlanId?: string }) => {
-  const isFree = !currentPlanId || currentPlanId === 'free';
-  const isBasic = currentPlanId === 'basic_mxn';
-  const isPro = currentPlanId === 'pro_mxn';
-
+const PricingModal = ({ 
+  onClose, 
+  onSelectPlan, 
+  isLoading, 
+  currentPlanId, 
+  plans 
+}: { 
+  onClose: () => void, 
+  onSelectPlan: (id: string) => void, 
+  isLoading: boolean, 
+  currentPlanId?: string,
+  plans: SubscriptionPlan[]
+}) => {
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-200">
          <div className="p-6 border-b sticky top-0 bg-white z-10 flex justify-between items-center">
            <div>
               <h2 className="text-2xl font-bold text-slate-900">Elige tu Plan</h2>
@@ -627,87 +651,69 @@ const PricingModal = ({ onClose, onSelectPlan, isLoading, currentPlanId }: { onC
          
          <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            {/* Plan Gratuito */}
-            <div className={`border rounded-xl p-6 flex flex-col transition-colors ${isFree ? 'border-indigo-200 bg-indigo-50/20' : 'border-slate-200'}`}>
-               <div className="mb-4">
-                 <h3 className="font-bold text-lg text-slate-800">Gratuito</h3>
-                 <p className="text-3xl font-bold mt-2">$0 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
-               </div>
-               <ul className="space-y-3 mb-8 flex-1">
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 1 Tienda</li>
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 5 Empleados Máx.</li>
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> 1000 Productos</li>
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-green-500" /> Punto de Venta Básico</li>
-               </ul>
-               <button disabled className="w-full py-2 bg-slate-100 text-slate-400 font-bold rounded-lg cursor-not-allowed">
-                 {isFree ? 'Tu Plan Actual' : 'Plan Básico'}
-               </button>
-            </div>
+            {plans.map((plan) => {
+              const isCurrent = currentPlanId === plan.id || (!currentPlanId && plan.id === 'free');
+              const isFree = plan.price === 0;
+              const isPopular = plan.isPopular;
+              
+              return (
+                <div 
+                  key={plan.id}
+                  className={`border rounded-xl p-6 flex flex-col transition-all relative ${
+                    isPopular && !isCurrent ? 'border-indigo-500 shadow-xl scale-105 z-10' : 
+                    isCurrent ? 'border-green-500 bg-green-50/20' : 'border-slate-200 hover:border-indigo-300'
+                  }`}
+                >
+                   {isPopular && !isCurrent && (
+                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
+                       MÁS POPULAR
+                     </div>
+                   )}
+                   
+                   <div className="mb-4 mt-2">
+                     <h3 className={`font-bold text-lg ${isPopular ? 'text-indigo-900' : 'text-slate-800'}`}>{plan.name}</h3>
+                     <p className={`text-3xl font-bold mt-2 ${isPopular ? 'text-indigo-700' : 'text-slate-900'}`}>
+                       ${plan.price} <span className="text-sm font-normal text-slate-500">{plan.currency}/mes</span>
+                     </p>
+                   </div>
+                   
+                   <ul className="space-y-3 mb-8 flex-1">
+                     <li className="flex gap-2 text-sm font-medium text-slate-700">
+                       <Check size={18} className={isPopular ? "text-indigo-600" : "text-green-500"} /> 
+                       {plan.maxEmployees === -1 ? 'Empleados Ilimitados' : `${plan.maxEmployees} Empleados`}
+                     </li>
+                     <li className="flex gap-2 text-sm font-medium text-slate-700">
+                        <Check size={18} className={isPopular ? "text-indigo-600" : "text-green-500"} />
+                        {plan.maxProducts === -1 ? 'Productos Ilimitados' : `${plan.maxProducts} Productos`}
+                     </li>
+                     {plan.features.map((feature, idx) => (
+                       <li key={idx} className="flex gap-2 text-sm text-slate-600">
+                         <Check size={18} className={isPopular ? "text-indigo-600" : "text-green-500"} /> 
+                         {feature}
+                       </li>
+                     ))}
+                   </ul>
 
-            {/* Plan Emprendedor */}
-            <div className={`border-2 rounded-xl p-6 flex flex-col relative shadow-lg transform ${isBasic ? 'border-slate-300 scale-100' : 'border-indigo-500 bg-indigo-50/30 scale-105'}`}>
-               {!isBasic && !isPro && (
-                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow-sm">
-                   MÁS POPULAR
-                 </div>
-               )}
-               <div className="mb-4 mt-2">
-                 <h3 className="font-bold text-lg text-indigo-900">Emprendedor</h3>
-                 <p className="text-3xl font-bold mt-2 text-indigo-700">$199 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
-               </div>
-               <ul className="space-y-3 mb-8 flex-1">
-                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> 15 Empleados</li>
-                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Productos Ilimitados</li>
-                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Reportes Avanzados</li>
-                 <li className="flex gap-2 text-sm text-slate-700 font-medium"><Check size={18} className="text-indigo-600" /> Soporte Prioritario</li>
-               </ul>
-               {isBasic ? (
-                 <button disabled className="w-full py-2 bg-slate-200 text-slate-500 font-bold rounded-lg cursor-not-allowed flex justify-center items-center gap-2">
-                   <CheckCircle size={18} /> Plan Actual
-                 </button>
-               ) : (
-                  isPro ? (
-                    <button disabled className="w-full py-2 bg-slate-100 text-slate-400 font-bold rounded-lg cursor-not-allowed">
-                      Incluido en Empresarial
-                    </button>
-                  ) : (
-                    <button 
-                      onClick={() => onSelectPlan('basic_mxn')}
-                      disabled={isLoading}
-                      className="w-full py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-md transition-transform active:scale-95 flex justify-center items-center gap-2"
-                    >
-                      {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Elegir Emprendedor'}
-                    </button>
-                  )
-               )}
-            </div>
-
-            {/* Plan Empresarial */}
-            <div className={`border rounded-xl p-6 flex flex-col transition-colors ${isPro ? 'border-amber-400 ring-1 ring-amber-400 bg-amber-50/20' : 'border-slate-200 hover:border-amber-400'}`}>
-               <div className="mb-4">
-                 <h3 className="font-bold text-lg text-slate-800">Empresarial</h3>
-                 <p className="text-3xl font-bold mt-2 text-slate-900">$499 <span className="text-sm font-normal text-slate-500">MXN/mes</span></p>
-               </div>
-               <ul className="space-y-3 mb-8 flex-1">
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Empleados Ilimitados</li>
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Múltiples Sucursales</li>
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> API de Acceso</li>
-                 <li className="flex gap-2 text-sm text-slate-600"><Check size={18} className="text-amber-500" /> Soporte 24/7 Dedicado</li>
-               </ul>
-               {isPro ? (
-                 <button disabled className="w-full py-2 bg-amber-100 text-amber-700 font-bold rounded-lg cursor-not-allowed flex justify-center items-center gap-2">
-                   <Crown size={18} /> Plan Actual
-                 </button>
-               ) : (
-                 <button 
-                    onClick={() => onSelectPlan('pro_mxn')}
-                    disabled={isLoading}
-                    className="w-full py-2 bg-slate-900 text-white font-bold rounded-lg hover:bg-slate-800 shadow-sm transition-transform active:scale-95 flex justify-center items-center gap-2"
-                 >
-                    {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Elegir Empresarial'}
-                 </button>
-               )}
-            </div>
+                   {isCurrent ? (
+                     <button disabled className="w-full py-2 bg-slate-200 text-slate-500 font-bold rounded-lg cursor-not-allowed flex justify-center items-center gap-2">
+                       <CheckCircle size={18} /> Plan Actual
+                     </button>
+                   ) : (
+                      <button 
+                        onClick={() => onSelectPlan(plan.id)}
+                        disabled={isLoading}
+                        className={`w-full py-2 font-bold rounded-lg transition-transform active:scale-95 flex justify-center items-center gap-2 ${
+                          isPopular 
+                          ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md' 
+                          : 'bg-slate-900 text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        {isLoading ? <Loader2 size={18} className="animate-spin" /> : `Elegir ${plan.name}`}
+                      </button>
+                   )}
+                </div>
+              );
+            })}
 
          </div>
          <div className="p-4 bg-slate-50 text-center text-xs text-slate-400">

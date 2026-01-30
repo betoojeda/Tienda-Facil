@@ -1,4 +1,4 @@
-import { Product, Sale, User, Store, Role } from '../types';
+import { Product, Sale, User, Store, Role, SystemConfig, SubscriptionPlan } from '../types';
 import * as XLSX from 'xlsx';
 
 // --- CONFIGURACIÓN PARA BASE DE DATOS REAL (GOOGLE FIREBASE) ---
@@ -24,6 +24,37 @@ const CONFIG_KEY = 'tf_config';
 const SESSION_USER_KEY = 'tf_session_user';
 const SESSION_STORE_KEY = 'tf_session_store';
 
+const DEFAULT_PLANS: SubscriptionPlan[] = [
+  {
+    id: 'free',
+    name: 'Gratuito',
+    price: 0,
+    currency: 'MXN',
+    maxEmployees: 5,
+    maxProducts: 1000,
+    features: ['1 Tienda', 'Punto de Venta Básico', 'Reportes Simples']
+  },
+  {
+    id: 'basic_mxn',
+    name: 'Emprendedor',
+    price: 199,
+    currency: 'MXN',
+    maxEmployees: 15,
+    maxProducts: -1, // Unlimited
+    features: ['15 Empleados', 'Productos Ilimitados', 'Reportes Avanzados', 'Soporte Prioritario'],
+    isPopular: true
+  },
+  {
+    id: 'pro_mxn',
+    name: 'Empresarial',
+    price: 499,
+    currency: 'MXN',
+    maxEmployees: -1, // Unlimited
+    maxProducts: -1, // Unlimited
+    features: ['Empleados Ilimitados', 'Múltiples Sucursales', 'API de Acceso', 'Soporte 24/7']
+  }
+];
+
 // Helper to simulate network (removed delay for better reliability)
 const simulateNetwork = <T>(data: T): Promise<T> => {
   return Promise.resolve(data);
@@ -41,17 +72,22 @@ const safeParse = <T>(key: string, fallback: T): T => {
 };
 
 // --- System Configuration ---
-export const getSystemConfig = async () => {
-  if (USE_CLOUD_DB) {
-    return { freeTierLimit: 1000 }; 
-  }
-  const config = safeParse(CONFIG_KEY, { freeTierLimit: 1000 });
+export const getSystemConfig = async (): Promise<SystemConfig> => {
+  const storedConfig = safeParse<Partial<SystemConfig>>(CONFIG_KEY, {});
+  
+  // Merge defaults ensures new plans appear if config is partial
+  const config: SystemConfig = {
+    freeTierLimit: storedConfig.freeTierLimit || 1000,
+    plans: storedConfig.plans && storedConfig.plans.length > 0 ? storedConfig.plans : DEFAULT_PLANS
+  };
+
   return simulateNetwork(config);
 };
 
-export const updateSystemConfig = async (newConfig: { freeTierLimit: number }): Promise<void> => {
+export const updateSystemConfig = async (newConfig: Partial<SystemConfig>): Promise<void> => {
   const current = await getSystemConfig();
-  localStorage.setItem(CONFIG_KEY, JSON.stringify({ ...current, ...newConfig }));
+  const updated = { ...current, ...newConfig };
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(updated));
   return simulateNetwork(undefined);
 };
 
@@ -95,6 +131,7 @@ export const getGlobalStats = async () => {
     totalSales: allSales.length,
     totalRevenue,
     freeTierLimit: config.freeTierLimit,
+    plans: config.plans, // Return plans for stats
     storesList: stores.map(s => {
       const owner = users.find(u => u.id === s.ownerId);
       
@@ -126,7 +163,7 @@ export const getUsers = async (): Promise<User[]> => {
   const adminUser: User = {
     id: 'admin_01',
     username: 'admin',
-    password: 'admin', 
+    password: 'Sebas2026*', // PASSWORD UPDATED HERE
     role: 'super_admin'
   };
 
@@ -138,6 +175,7 @@ export const getUsers = async (): Promise<User[]> => {
     users.push(adminUser);
     needsUpdate = true;
   } else if (users[adminIndex].password !== adminUser.password) {
+    // If password in DB is different from code (and it is super_admin), update it
     users[adminIndex].password = adminUser.password;
     needsUpdate = true;
   }
@@ -223,10 +261,16 @@ export const upgradeStoreSubscription = async (storeId: string, planId: string =
   const stores = await getStores();
   const index = stores.findIndex(s => s.id === storeId);
   if (index >= 0) {
-    stores[index].subscription = 'PREMIUM';
-    stores[index].planId = planId;
-    stores[index].subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    localStorage.setItem(STORES_KEY, JSON.stringify(stores));
+    const config = await getSystemConfig();
+    const selectedPlan = config.plans.find(p => p.id === planId);
+    
+    // Only upgrade if valid plan, but allow fallback if logic fails
+    if (selectedPlan) {
+        stores[index].subscription = selectedPlan.price > 0 ? 'PREMIUM' : 'FREE';
+        stores[index].planId = planId;
+        stores[index].subscriptionExpiry = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        localStorage.setItem(STORES_KEY, JSON.stringify(stores));
+    }
   }
   await simulateNetwork(null);
 };
@@ -254,6 +298,7 @@ export const addStaffToStore = async (storeId: string, staffUsername: string): P
   const stores = await getStores();
   const storeIndex = stores.findIndex(s => s.id === storeId);
   const users = await getUsers();
+  const config = await getSystemConfig();
   
   if (storeIndex === -1) return { success: false, message: 'Tienda no encontrada' };
   
@@ -263,13 +308,14 @@ export const addStaffToStore = async (storeId: string, staffUsername: string): P
   const store = stores[storeIndex];
 
   // --- LIMIT CHECK ---
-  if (store.subscription === 'FREE' && store.staffUsernames.length >= 5) {
-    return { success: false, message: 'Límite de 5 empleados alcanzado. Mejora tu plan para añadir más.' };
-  }
+  // Find current plan config
+  const currentPlan = config.plans.find(p => p.id === store.planId) || config.plans.find(p => p.id === 'free');
   
-  // Custom limit for basic paid plan (Example: basic_mxn limit 15)
-  if (store.planId === 'basic_mxn' && store.staffUsernames.length >= 15) {
-     return { success: false, message: 'Límite de 15 empleados alcanzado en Plan Emprendedor.' };
+  if (currentPlan) {
+    // If maxEmployees is -1, it is unlimited
+    if (currentPlan.maxEmployees !== -1 && store.staffUsernames.length >= currentPlan.maxEmployees) {
+       return { success: false, message: `Límite de ${currentPlan.maxEmployees} empleados alcanzado para el plan ${currentPlan.name}.` };
+    }
   }
 
   if (!store.staffUsernames.includes(staffUsername)) {
@@ -294,15 +340,18 @@ export const getProducts = async (storeId: string): Promise<Product[]> => {
 export const saveProduct = async (product: Product, currentStore: Store): Promise<{ success: boolean, message?: string }> => {
   const allProducts: Product[] = safeParse(PRODUCTS_KEY, []);
   
-  if (currentStore.subscription === 'FREE' && !product.id.includes('existing')) {
+  // Logic for limits based on configurable plans
+  if (!product.id.includes('existing')) {
     const config = await getSystemConfig();
-    const limit = config.freeTierLimit;
+    const currentPlan = config.plans.find(p => p.id === currentStore.planId) || config.plans.find(p => p.id === 'free');
     
-    const storeProductCount = allProducts.filter(p => p.storeId === currentStore.id).length;
-    const isEditing = allProducts.some(p => p.id === product.id);
-    
-    if (!isEditing && storeProductCount >= limit) { 
-      return { success: false, message: `Límite Gratuito Alcanzado (${limit} productos).` };
+    if (currentPlan && currentPlan.maxProducts !== -1) {
+        const storeProductCount = allProducts.filter(p => p.storeId === currentStore.id).length;
+        const isEditing = allProducts.some(p => p.id === product.id);
+        
+        if (!isEditing && storeProductCount >= currentPlan.maxProducts) { 
+          return { success: false, message: `Límite de ${currentPlan.maxProducts} productos alcanzado en plan ${currentPlan.name}.` };
+        }
     }
   }
   
