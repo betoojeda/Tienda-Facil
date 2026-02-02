@@ -245,7 +245,11 @@ const App: React.FC = () => {
               )}
               
               {view === ViewState.POS && (
-                <POS products={products} onRecordSale={handleRecordSale} />
+                <POS 
+                  products={products} 
+                  onRecordSale={handleRecordSale} 
+                  totalSalesCount={sales.length}
+                />
               )}
               
               {view === ViewState.INVENTORY && currentStore && (

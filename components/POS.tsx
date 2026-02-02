@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Product, CartItem, Sale } from '../types';
-import { Plus, Minus, Trash2, CreditCard, Banknote, Search, ShoppingBag, Eye, X, QrCode, Globe } from 'lucide-react';
+import { Plus, Minus, Trash2, CreditCard, Banknote, Search, ShoppingBag, Eye, X, QrCode, Globe, Receipt } from 'lucide-react';
 
 interface POSProps {
   products: Product[];
   onRecordSale: (sale: Omit<Sale, 'storeId' | 'soldBy'>) => void;
+  totalSalesCount: number;
 }
 
-const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
+const POS: React.FC<POSProps> = ({ products, onRecordSale, totalSalesCount }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('Todos');
@@ -19,6 +20,13 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
   const categories = ['Todos', ...Array.from(new Set(products.map(p => p.category)))];
 
   const addToCart = (product: Product) => {
+    // Check stock before adding
+    const currentInCart = cart.find(item => item.id === product.id)?.quantity || 0;
+    if (currentInCart + 1 > product.stock) {
+      alert("No hay suficiente stock disponible.");
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
@@ -35,6 +43,18 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
   };
 
   const updateQuantity = (productId: string, delta: number) => {
+    // Check stock limit when increasing
+    if (delta > 0) {
+      const product = products.find(p => p.id === productId);
+      const itemInCart = cart.find(item => item.id === productId);
+      if (product && itemInCart) {
+        if (itemInCart.quantity + delta > product.stock) {
+          alert("Stock máximo alcanzado.");
+          return;
+        }
+      }
+    }
+
     setCart(prev => prev.map(item => {
       if (item.id === productId) {
         const newQty = Math.max(1, item.quantity + delta);
@@ -101,18 +121,28 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
       
       {/* Products Area */}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Search & Filter */}
+        {/* Search & Filter & Stats */}
         <div className="mb-4 space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="Buscar por nombre o código..." 
-              className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
+          <div className="flex gap-3">
+             <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+                <input 
+                  type="text" 
+                  placeholder="Buscar por nombre o código..." 
+                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+             </div>
+             
+             {/* Sales Counter Badge */}
+             <div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-4 rounded-lg font-bold text-sm border border-indigo-100 whitespace-nowrap shadow-sm" title="Ventas totales registradas">
+               <Receipt size={18} />
+               <span className="hidden sm:inline">Ventas:</span>
+               <span className="text-lg">{totalSalesCount}</span>
+             </div>
           </div>
+
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
             {categories.map(cat => (
               <button
@@ -132,47 +162,54 @@ const POS: React.FC<POSProps> = ({ products, onRecordSale }) => {
 
         {/* Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 overflow-y-auto pr-2 pb-20 lg:pb-0">
-          {filteredProducts.map(product => (
-            <div
-              key={product.id}
-              onClick={() => addToCart(product)}
-              role="button"
-              className="group bg-white p-3 rounded-xl shadow-sm border border-slate-100 hover:border-indigo-300 hover:shadow-lg hover:scale-105 transition-all duration-200 text-left flex flex-col h-full transform cursor-pointer relative"
-            >
-              {/* Image Container with Quick View Trigger - Only renders if image exists */}
-              {product.image && (
-                <div 
-                  className="w-full h-32 bg-slate-100 rounded-lg mb-3 overflow-hidden relative cursor-zoom-in"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewingProduct(product);
-                  }}
-                >
-                   <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
-                   
-                   {/* Overlay on Hover */}
-                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                      <Eye className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" size={24} />
+          {filteredProducts.map(product => {
+            const isLowStock = product.stock <= (product.minStock || 5);
+            return (
+              <div
+                key={product.id}
+                onClick={() => addToCart(product)}
+                role="button"
+                className={`group bg-white p-3 rounded-xl shadow-sm border hover:shadow-lg hover:scale-105 transition-all duration-200 text-left flex flex-col h-full transform cursor-pointer relative ${
+                  isLowStock ? 'border-red-200' : 'border-slate-100 hover:border-indigo-300'
+                }`}
+              >
+                {/* Image Container with Quick View Trigger - Only renders if image exists */}
+                {product.image && (
+                  <div 
+                    className="w-full h-32 bg-slate-100 rounded-lg mb-3 overflow-hidden relative cursor-zoom-in"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingProduct(product);
+                    }}
+                  >
+                     <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+                     
+                     {/* Overlay on Hover */}
+                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                        <Eye className="text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-md" size={24} />
+                     </div>
+  
+                     <div className={`absolute top-1 right-1 px-2 py-0.5 rounded text-xs font-bold shadow-sm ${isLowStock ? 'bg-red-500 text-white' : 'bg-white/90 text-slate-700'}`}>
+                       {product.stock}
+                     </div>
+                  </div>
+                )}
+                
+                <div className="mb-1">
+                   <div className="flex justify-between items-start">
+                     <span className="text-xs font-bold text-slate-400 block">{product.code}</span>
+                     {!product.image && (
+                       <span className={`text-xs font-bold px-1 rounded ${isLowStock ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-400'}`}>
+                         Stock: {product.stock}
+                       </span>
+                     )}
                    </div>
-
-                   <div className="absolute top-1 right-1 bg-white/90 px-2 py-0.5 rounded text-xs font-bold shadow-sm text-slate-700">
-                     Stock: {product.stock}
-                   </div>
+                   <h3 className="font-semibold text-slate-800 leading-tight line-clamp-2">{product.name}</h3>
                 </div>
-              )}
-              
-              <div className="mb-1">
-                 <div className="flex justify-between items-start">
-                   <span className="text-xs font-bold text-slate-400 block">{product.code}</span>
-                   {!product.image && (
-                     <span className="text-xs font-bold text-slate-400 bg-slate-100 px-1 rounded">Stock: {product.stock}</span>
-                   )}
-                 </div>
-                 <h3 className="font-semibold text-slate-800 leading-tight line-clamp-2">{product.name}</h3>
+                <p className="text-indigo-600 font-bold mt-auto pt-2 text-lg">${product.price.toFixed(2)}</p>
               </div>
-              <p className="text-indigo-600 font-bold mt-auto pt-2 text-lg">${product.price.toFixed(2)}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

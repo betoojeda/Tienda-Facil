@@ -24,6 +24,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product>>({});
   const [errorMessage, setErrorMessage] = useState('');
+  const [formErrors, setFormErrors] = useState<{ code?: string, name?: string }>({}); // New state for field errors
   const [isSaving, setIsSaving] = useState(false);
   
   // Filtering & Sorting State
@@ -150,6 +151,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
 
   const handleEdit = (product: Product) => {
     setErrorMessage('');
+    setFormErrors({});
     setEditingProduct(product);
     setIsModalOpen(true);
   };
@@ -169,6 +171,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
 
   const handleAdd = () => {
     setErrorMessage('');
+    setFormErrors({});
     if (isFreeTier && productCount >= freeLimit) {
       alert(`Has alcanzado el límite de ${freeLimit} productos del plan GRATIS.`);
       return;
@@ -193,13 +196,13 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
     const code = editingProduct.code?.trim();
     const name = editingProduct.name?.trim();
 
-    if (!code) {
-      setErrorMessage('El campo "Código" es obligatorio.');
-      return;
-    }
+    // Field Validation
+    const newErrors: { code?: string, name?: string } = {};
+    if (!code) newErrors.code = 'El código es obligatorio.';
+    if (!name) newErrors.name = 'La descripción es obligatoria.';
 
-    if (!name) {
-      setErrorMessage('El campo "Descripción" es obligatorio.');
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
       return;
     }
 
@@ -297,8 +300,6 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
-
-  const isInvalid = (value: string | undefined) => errorMessage && (!value || !value.trim());
 
   const SortableHeader = ({ label, sortKey, align = 'left' }: { label: string, sortKey: SortKey, align?: 'left' | 'right' | 'center' }) => {
     const isActive = sortConfig?.key === sortKey;
@@ -471,11 +472,17 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
                 </tr>
               ) : (
                 displayedProducts.map(product => {
-                  const isLowStock = product.stock <= (product.minStock || 5);
+                  // Determine low stock based on minStock (default 5 if not set)
+                  const isLowStock = product.stock <= (product.minStock ?? 5);
+                  
                   return (
                     <tr 
                       key={product.id} 
-                      className={`transition-colors ${isLowStock ? 'bg-red-50/60 hover:bg-red-100/50' : 'hover:bg-slate-50'}`}
+                      className={`transition-colors border-l-4 ${
+                        isLowStock 
+                          ? 'bg-red-50 hover:bg-red-100/50 border-l-red-500' 
+                          : 'hover:bg-slate-50 border-l-transparent'
+                      }`}
                     >
                       <td className="px-4 py-3 text-sm font-mono text-slate-500">{product.code}</td>
                       <td className="px-4 py-3 text-sm font-medium text-slate-900">
@@ -488,9 +495,17 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
                       <td className="px-4 py-3 text-sm text-right text-slate-500">${product.wholesalePrice?.toFixed(2)}</td>
                       
                       <td className="px-4 py-3 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {isLowStock && <AlertTriangle size={14} className="text-red-500" />}
-                          <span className={`px-2 py-1 rounded text-xs font-bold ${isLowStock ? 'text-red-700' : 'bg-green-100 text-green-700'}`}>
+                        <div className="flex items-center justify-center gap-2">
+                          {isLowStock && (
+                            <div title="Stock Bajo" className="text-red-500 animate-pulse">
+                              <AlertTriangle size={16} />
+                            </div>
+                          )}
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border ${
+                            isLowStock 
+                              ? 'bg-white text-red-600 border-red-200 shadow-sm' 
+                              : 'bg-green-100 text-green-700 border-green-200'
+                          }`}>
                             {product.stock}
                           </span>
                         </div>
@@ -576,11 +591,17 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
                   value={editingProduct.code || ''} 
                   onChange={e => {
                     setEditingProduct(p => ({...p, code: e.target.value}));
+                    if(formErrors.code) setFormErrors(prev => ({...prev, code: undefined}));
                     if(errorMessage) setErrorMessage('');
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors ${isInvalid(editingProduct.code) ? 'border-red-500 bg-red-50' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors ${formErrors.code ? 'border-red-500 bg-red-50' : ''}`}
                   placeholder="Ej: ABC-001"
                 />
+                {formErrors.code && (
+                   <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
+                     <AlertCircle size={12} /> {formErrors.code}
+                   </p>
+                )}
               </div>
 
               <div className="md:col-span-1">
@@ -603,10 +624,16 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
                   value={editingProduct.name || ''} 
                   onChange={e => {
                     setEditingProduct(p => ({...p, name: e.target.value}));
+                    if(formErrors.name) setFormErrors(prev => ({...prev, name: undefined}));
                     if(errorMessage) setErrorMessage('');
                   }}
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors ${isInvalid(editingProduct.name) ? 'border-red-500 bg-red-50' : ''}`}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors ${formErrors.name ? 'border-red-500 bg-red-50' : ''}`}
                 />
+                {formErrors.name && (
+                   <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
+                     <AlertCircle size={12} /> {formErrors.name}
+                   </p>
+                )}
               </div>
               
               <div className="md:col-span-2 border-t pt-4 mt-2">
