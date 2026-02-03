@@ -24,7 +24,7 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Partial<Product>>({});
   const [errorMessage, setErrorMessage] = useState('');
-  const [formErrors, setFormErrors] = useState<{ code?: string, name?: string }>({}); // New state for field errors
+  const [formErrors, setFormErrors] = useState<{ code?: string, name?: string }>({}); // Validation state
   const [isSaving, setIsSaving] = useState(false);
   
   // Filtering & Sorting State
@@ -196,10 +196,10 @@ const Inventory: React.FC<InventoryProps> = ({ products, currentStore, onSave, o
     const code = editingProduct.code?.trim();
     const name = editingProduct.name?.trim();
 
-    // Field Validation
+    // Validations
     const newErrors: { code?: string, name?: string } = {};
-    if (!code) newErrors.code = 'El código es obligatorio.';
-    if (!name) newErrors.name = 'La descripción es obligatoria.';
+    if (!code) newErrors.code = 'El código es obligatorio';
+    if (!name) newErrors.name = 'La descripción es obligatoria';
 
     if (Object.keys(newErrors).length > 0) {
       setFormErrors(newErrors);
@@ -472,8 +472,8 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
                 </tr>
               ) : (
                 displayedProducts.map(product => {
-                  // Determine low stock based on minStock (default 5 if not set)
-                  const isLowStock = product.stock <= (product.minStock ?? 5);
+                  // Low Stock Alert Logic
+                  const isLowStock = product.stock <= (product.minStock || 5);
                   
                   return (
                     <tr 
@@ -591,16 +591,16 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
                   value={editingProduct.code || ''} 
                   onChange={e => {
                     setEditingProduct(p => ({...p, code: e.target.value}));
-                    if(formErrors.code) setFormErrors(prev => ({...prev, code: undefined}));
-                    if(errorMessage) setErrorMessage('');
+                    if (formErrors.code) setFormErrors(prev => ({...prev, code: undefined}));
+                    if (errorMessage) setErrorMessage('');
                   }}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors ${formErrors.code ? 'border-red-500 bg-red-50' : ''}`}
                   placeholder="Ej: ABC-001"
                 />
                 {formErrors.code && (
-                   <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
-                     <AlertCircle size={12} /> {formErrors.code}
-                   </p>
+                  <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
+                    <AlertCircle size={12} /> {formErrors.code}
+                  </p>
                 )}
               </div>
 
@@ -624,15 +624,15 @@ EJ-004,Galletas Marias,10.00,14.00,12.00,30,8,Galletas`;
                   value={editingProduct.name || ''} 
                   onChange={e => {
                     setEditingProduct(p => ({...p, name: e.target.value}));
-                    if(formErrors.name) setFormErrors(prev => ({...prev, name: undefined}));
-                    if(errorMessage) setErrorMessage('');
+                    if (formErrors.name) setFormErrors(prev => ({...prev, name: undefined}));
+                    if (errorMessage) setErrorMessage('');
                   }}
                   className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition-colors ${formErrors.name ? 'border-red-500 bg-red-50' : ''}`}
                 />
                 {formErrors.name && (
-                   <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
-                     <AlertCircle size={12} /> {formErrors.name}
-                   </p>
+                  <p className="text-xs text-red-600 mt-1 font-medium flex items-center gap-1">
+                    <AlertCircle size={12} /> {formErrors.name}
+                  </p>
                 )}
               </div>
               
